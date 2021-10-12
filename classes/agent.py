@@ -1,0 +1,96 @@
+import numpy as np
+import matplotlib.pyplot as plt 
+import seaborn as sns
+from copy import deepcopy
+
+from classes.internal_state import Internal_state
+
+
+class Agent():
+    def __init__(self, N, sensory_state, internal_state, action_state):
+        # Set parameters
+        self._N = N
+        self._n = 0
+
+        # Set blanket states
+        ## Sensory state: must be a Sensory_state object
+        self._sensory_state = sensory_state
+        
+        ## Action states: must be an Action_state object
+        self._action_state = action_state
+
+        # Internal states: must be an Internal_state object
+        self._internal_state = internal_state
+
+        
+    # Core methods
+    ## Learn
+    def learn(self, external_state, intervention=None):
+        # Observe new external state
+        self._sensory_state.observe(external_state, self._internal_state)
+
+        # Update internal states
+        self._internal_state.update(self._sensory_state, intervention=intervention)
+
+        self._n += 1
+
+    ## Act by sampling an action
+    def act(self, external_state):
+        # Sample new action
+        action = self._action_state.sample(deepcopy(external_state), 
+                                           deepcopy(self._sensory_state), 
+                                           deepcopy(self._internal_state))
+
+        return action
+
+
+    # Resets the agent by rolling back all states
+    def reset(self):
+        self._sensory_state.rollback()
+        self._internal_state.rollback()
+        self._action_state.rollback()
+
+    # Properties
+    @property
+    def states(self):
+        return self._sensory_state, self._internal_state, self._action_state
+
+    @property
+    def sensory_state(self):
+        return self._sensory_state
+
+    @property
+    def internal_state(self):
+        return self._internal_state
+
+    @property
+    def action_state(self):
+        return self._action_state
+
+
+    # Reports
+    def plot_entropy_history(self, colour='blue'):
+        entropy = self.internal_state.entropy_history
+        ax = sns.lineplot(data=entropy[0:self._n+1], lw=1.5, palette=[colour]) # Plot data
+        plt.title('Entropy evolution')
+
+    def plot_posterior(self):
+        posterior = self.internal_state.posterior
+        ax = sns.lineplot(data=posterior, lw=1.5) # Plot data
+        plt.title('Posterior distribution over models')
+
+    def plot_posterior_history(self):
+        posterior_history = self.internal_state.posterior_history
+        x = np.arange(0, posterior_history.shape[1])
+        y = np.arange(0, posterior_history.shape[0])
+        Y, X = np.meshgrid(x, y)
+        Z = posterior_history
+
+        ax = plt.axes(projection='3d')
+        ax.contour3D(X, Y, Z, 50, cmap='viridis')
+        ax.set_xlabel('Epochs')
+        ax.set_ylabel('Models')
+        ax.set_zlabel('Likelihood')
+        plt.title('Posterior evolution')
+
+        
