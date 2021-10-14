@@ -1,6 +1,7 @@
 testing_ground.ipynb
 resources/
 derivations/
+*/__pycache__/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
