@@ -216,8 +216,6 @@ class Discrete_IS(Internal_state):
             return S_mat
 
     
-
-
 # Normative agent
 class Normative_DIS(Discrete_IS):
     def __init__(self, N, K, prior_params, prior_sample_size, links, dt, theta, sigma, sample_params=True):
@@ -233,8 +231,6 @@ class Normative_DIS(Discrete_IS):
         self._mus_history = [None for i in range(self._N)]
 
         
-
-
     # Update rule
     def _update_rule(self, sensory_state, intervention=None):
         obs = sensory_state.s
@@ -268,6 +264,7 @@ class Normative_DIS(Discrete_IS):
     def _update_mus(self, obs):
         self._mus_history[self._n] = self._mus
         self._mus = self._attractor_mu(obs)
+
 
     def _attractor_mu(self, obs): 
         att_mu =  obs @ self._sample_space_as_mat 
