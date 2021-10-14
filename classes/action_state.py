@@ -112,7 +112,6 @@ class Action_state():
         flat_action = self._flatten_action(constrained_action)
 
         if self._behaviour == 'random':
-            
             # If behaviour is random, simply return the probability of taking any action
             self._action_idx = 0
             self._current_action = flat_action
