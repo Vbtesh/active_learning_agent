@@ -18,23 +18,25 @@ class Experiment():
         self._entropy_history = np.zeros((self._iter, self._N+1))
 
 
-    def fit(self):
+    def fit(self, final_judgement):
         if not self.external_state._realised:
             print('Cannot fit data that does not exists, use Experiment.run instead. Exiting...')
             return
 
         for n in range(self._n):
             a = self.external_state.a
-            self._agent.fit_action(a)
+            self._agent.fit_action(self.external_state, a)
             x = self.external_state.run(intervention=a)
-            self.agent.fit(self.external_state, intervention=a)
+            self.agent.learn(self.external_state, intervention=a)
 
             if n % 10 == 0:
                 print('Iter:', n)
                 print('Current MAP:', self.agent.internal_state.map)
 
+            self._n += 1
 
-    
+        self.agent.fit_judgement(final_judgement)
+        print('Final log likelihood:', self.agent.log_likelihood)
 
 
     def run(self):     

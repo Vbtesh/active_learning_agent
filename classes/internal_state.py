@@ -146,8 +146,12 @@ class Discrete_IS(Internal_state):
             return self._sample_space[graph_idx].squeeze()
 
     # PMF of the posterior for a given graph
-    def posterior_PMF(self, graph):
-        return self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]]
+    def posterior_PMF(self, graph, log=False):
+        if not log:
+            return self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]]
+        else:  
+            return np.log(self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]])
+
 
     # Background methods for likelihood and sampling for discrete distributions
     def _likelihood(self, log_likelihood):

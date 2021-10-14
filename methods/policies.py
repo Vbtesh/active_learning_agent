@@ -15,7 +15,10 @@ def softmax_policy_init(temperature):
         p = np.exp(temperature * action_values) / np.sum(np.exp(temperature * action_values))
         return p[action_taken]
 
-    return softmax_policy, pmf_softmax_policy
+    def params_softmax_policy(action_values):
+        return np.exp(temperature * action_values) / np.sum(np.exp(temperature * action_values))
+
+    return softmax_policy, pmf_softmax_policy, params_softmax_policy
 
 
 def epsilon_greedy_init(epsilon):
@@ -31,5 +34,12 @@ def epsilon_greedy_init(epsilon):
             return epsilon + (1 - epsilon)/action_values.size
         else:
             return (1 - epsilon)/action_values.size
+
+
+    def params_e_greedy_policy(action_values):
+        params = np.zeros(action_values.shape)
+        params += epsilon/params.size
+        params[np.argmax(action_values)] += 1 - epsilon
+        return params
         
-    return e_greedy_policy, pmf_e_greedy_policy
+    return e_greedy_policy, pmf_e_greedy_policy, params_e_greedy_policy
