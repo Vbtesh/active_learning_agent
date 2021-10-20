@@ -48,22 +48,23 @@ class Agent():
         return action
 
     # Fit action
-    def fit_action(self, external_state, action):
+    def fit_action(self, external_state, action, action_fit):
 
-        log_prob_action = self._action_state.fit(action,
-                                             deepcopy(external_state), 
-                                             deepcopy(self._sensory_state), 
-                                             deepcopy(self._internal_state))
+        log_prob_action = self._action_state.fit(action, 
+                                                 action_fit,
+                                                 deepcopy(external_state), 
+                                                 deepcopy(self._sensory_state), 
+                                                 deepcopy(self._internal_state))
 
         self._log_likelihood_history[self._n] = self._log_likelihood
-        self._log_likelihood += np.log_prob_action
+        self._log_likelihood += log_prob_action
         return log_prob_action
 
     # Fit judgement
     def fit_judgement(self, judgement):
         log_prob_judgement = self._internal_state.posterior_PMF(judgement, log=True)
         self._log_likelihood_history[self._n] = self._log_likelihood
-        self._log_likelihood += np.log_prob_action
+        self._log_likelihood += log_prob_judgement
 
 
     # Resets the agent by rolling back all states

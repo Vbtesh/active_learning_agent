@@ -6,8 +6,7 @@ from numpy.random.mtrand import uniform
 class Action_state():
     def __init__(self, N, K, 
                           behaviour,
-                          possible_actions, 
-                          idle,
+                          possible_actions,
                           action_len, 
                           policy_funcs,
                           epsilon, 
@@ -18,17 +17,15 @@ class Action_state():
         self._K = K
         self._behaviour = behaviour
 
-        if idle:
-            self._num_actions = self._K * len(possible_actions) + 1
-        else:
-            self._num_actions = self._K * len(possible_actions)
+        # Num of possible action is all possible values for all variable plus 1 for staying idle
+        self._num_actions = self._K * len(possible_actions) + 1
 
         self._action_grid = np.arange(self._K * len(possible_actions)).reshape(self._K, len(possible_actions))
 
         self._poss_actions = possible_actions
         self._action_len = action_len
         self._action_idx = 0
-        self._current_action = None
+        self._current_action = self._num_actions # Represents the index of doing nothing, i.e. None, in list form 
 
         # Certainty parameter, stops intervening when posterior entropy is below the threshold
         self._epsilon = epsilon
@@ -97,16 +94,15 @@ class Action_state():
     
 
     # Fit action to action states
-    def fit(self, action, external_state, sensory_state, internal_state):
+    def fit(self, action, action_fit, external_state, sensory_state, internal_state):
         if self._behaviour == 'obs':
             self._n += 1
             return np.inf # Log probability of acting given that the person is an observer is necessarily - infinity
 
-        self._action_idx += 1
-        if self._action_idx < self._action_len and self._action_check(self._remap_action(self._current_action), action):
-            self._n += 1
+        # If action and action fit are different, do not penalise log likelihood
+        if action and not action_fit:
             return 0
-
+        
         # Constraint actual action
         constrained_action = self._constrain_action(action)
         flat_action = self._flatten_action(constrained_action)
@@ -118,7 +114,8 @@ class Action_state():
             self._planned_actions[self._n] = flat_action
             self._n += 1
 
-            return np.log(1 / self._num_actions)
+            action_prob = 1 / self._num_actions
+            return np.log(action_prob)
         else:
             # Else do simulation to estimate action values if policy is not random
             seqs_values, seqs = self._compute_action_values(external_state, sensory_state, internal_state)
@@ -176,9 +173,10 @@ class Action_state():
 
     def _flatten_action(self, action):
         if not action:
-            return self._num_actions
+            return self._num_actions - 1
         else:    
-            return self._action_grid[action[0], action[1]]
+            value_idx = np.argmax(np.where(self._poss_actions == action[1])[0])
+            return self._action_grid[action[0], value_idx]
 
     # Evaluate action similarity
     def _action_check(self, action_1, action_2):
@@ -208,8 +206,8 @@ class Action_state():
 
 # Tree search action selection
 class Treesearch_AS(Action_state):
-    def __init__(self, N, K, behaviour, possible_actions, idle, action_len, policy_funcs, epsilon, C, knowledge, tree_search_func, tree_search_func_args=[]):
-        super().__init__(N, K, behaviour, possible_actions, idle, action_len, policy_funcs, epsilon, self._tree_search_action_values)
+    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, tree_search_func, tree_search_func_args=[]):
+        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, self._tree_search_action_values)
 
         self._tree_search_func = tree_search_func
         self._tree_search_func_args = tree_search_func_args
@@ -291,9 +289,9 @@ class Treesearch_AS(Action_state):
 
 # Undiscounted gain hard horizon
 class Undiscounted_gain_hard_horizon_TSAS(Treesearch_AS):
-    def __init__(self, N, K, behaviour, possible_actions, idle, action_len, policy_funcs, epsilon, C, knowledge, depth):
+    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, depth):
         self._depth = depth
-        super().__init__(N, K, behaviour, possible_actions, idle, action_len, policy_funcs, epsilon, C, knowledge, self._build_tree_ughh, tree_search_func_args=[self._depth])
+        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, self._build_tree_ughh, tree_search_func_args=[self._depth])
 
     
     def _build_tree_ughh(self, gain, external_state, sensory_state, internal_state, gain_update_rule, depth, seq=''):
@@ -324,12 +322,12 @@ class Undiscounted_gain_hard_horizon_TSAS(Treesearch_AS):
 
 # Discounted gain soft horizon
 class Discounted_gain_soft_horizon_TSAS(Treesearch_AS):
-    def __init__(self, N, K, behaviour, possible_actions, idle, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon):
+    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon):
 
         self._discount = discount 
         self._horizon = horizon
 
-        super().__init__(N, K, behaviour, possible_actions, idle, action_len, policy_funcs, epsilon, C, knowledge, self._build_tree_dgsh, tree_search_func_args=[discount, horizon])
+        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, self._build_tree_dgsh, tree_search_func_args=[discount, horizon])
 
     
     def _build_tree_dgsh(self, gain, external_state, sensory_state, internal_state, gain_update_rule, discount, horizon, depth=0, seq=''):

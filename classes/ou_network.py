@@ -4,7 +4,12 @@ import seaborn as sns
 
 
 class OU_Network():
-    def __init__(self, N, K, true_model, theta, dt, sigma, init_state=None, data=None, interventions=None, range_values=(-100, 100)):
+    def __init__(self, N, K, true_model, theta, dt, sigma, 
+                                                    init_state=None, 
+                                                    data=None, 
+                                                    inters=None, 
+                                                    inters_fit=None,
+                                                    range_values=(-100, 100)):
         # Parameters
         if len(true_model.shape) > 1:
             self._G = true_model
@@ -29,12 +34,18 @@ class OU_Network():
 
         if type(data) == np.ndarray:
             self._X = data
-            self._N = data.shape[0]
-            if interventions:
-                self._I = interventions # Intervention must be the same length as data and contain the indexes corresponding to the variables intervened upon
+            self._N = data.shape[0] - 1
+            if type(inters) == np.ndarray:
+                self._I = inters # Intervention must be the same length as data and contain the indexes corresponding to the variables intervened upon
+                # If inters_fit is given, assign it, otherwise, it is the same as inters
+                if type(inters_fit) == np.ndarray:
+                    self._I_fit = inters_fit
+                else:
+                    self._I_fit = inters
             else:
                 self._I = np.empty(self._N)
                 self._I[:] = np.nan
+                self._I_fit = self._I
 
             self._realised = True
         else:
@@ -121,9 +132,15 @@ class OU_Network():
         else:
             self._n -= back
 
-        self._X[self._n+1:,:] = 0 # Reset data except for the initial state
-        # Reset interventions
-        self._I[self._n+1:] = np.nan
+        if not self._realised:  
+            if back > self._N or back > self._n:
+                self._n = 0
+            else:
+                self._n -= back
+
+            self._X[self._n+1:,:] = 0 # Reset data except for the initial state
+            # Reset interventions
+            self._I[self._n+1:] = np.nan
 
 
     def plot_network(self, history=None):
@@ -194,10 +211,19 @@ class OU_Network():
 
     @property
     def a(self):
-        if self._I[self._n] == np.nan:
+        if np.isnan(self._I[self._n]):
             return None
         else: 
-            return (self._I[self._n], self.x)
+            action = int(self._I[self._n])
+            return (action, self.x[action])
+
+    @property
+    def a_fit(self):
+        if np.isnan(self._I_fit[self._n]):
+            return None
+        else:
+            action = int(self._I_fit[self._n])
+            return (action, self.x[action])
 
     @property
     def inters(self):

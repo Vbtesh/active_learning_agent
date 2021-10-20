@@ -23,19 +23,35 @@ class Experiment():
             print('Cannot fit data that does not exists, use Experiment.run instead. Exiting...')
             return
 
-        for n in range(self._n):
+        self.agent.reset()
+        self.external_state.reset()
+        self._n = 0
+
+        for n in range(self._N):
+            # Collect action and action to fit
             a = self.external_state.a
-            self._agent.fit_action(self.external_state, a)
-            x = self.external_state.run(intervention=a)
+            a_fit = self.external_state.a_fit
+
+            #print(a, a_fit)
+
+            # Fit action to fit
+            self.agent.fit_action(self.external_state, a, a_fit)
+
+            # Update external state using action
+            x = self.external_state.run(interventions=a)
+
+            # Learn from the new state
             self.agent.learn(self.external_state, intervention=a)
 
             if n % 10 == 0:
-                print('Iter:', n)
-                print('Current MAP:', self.agent.internal_state.map)
+                print('Iter:', n, 'Current MAP:', self.agent.internal_state.map, 'Current LL:', self.agent.log_likelihood)
 
             self._n += 1
 
-        self.agent.fit_judgement(final_judgement)
+        #self.agent.fit_judgement(final_judgement)
+        self.agent.fit_judgement(self.external_state.causal_vector)
+        print('True model:', self.external_state.causal_vector, 'Posterior:', final_judgement)
+        print('Final posterior', self.agent.internal_state.posterior_over_links)
         print('Final log likelihood:', self.agent.log_likelihood)
 
 

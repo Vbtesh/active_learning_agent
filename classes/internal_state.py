@@ -118,6 +118,10 @@ class Discrete_IS(Internal_state):
         return self._likelihood(self._posterior_params)
 
     @property
+    def posterior_over_links(self):
+        return self._models_to_links(self.posterior)
+
+    @property
     def map(self):
         graph_idx = np.argmax(self.posterior)
         return self._sample_space[graph_idx]
@@ -130,7 +134,6 @@ class Discrete_IS(Internal_state):
     def entropy_history(self):
         posterior_history = self._likelihood(self._posterior_params_history)
         return self._entropy(posterior_history)
-
 
 
     # Samples the posterior, the number of samples is given by the size parameter
