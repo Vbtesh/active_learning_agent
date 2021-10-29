@@ -1,65 +1,132 @@
 import numpy as np
+import pickle
 
 from classes.agent import Agent
 from classes.ou_network import OU_Network
 from classes.internal_state import Normative_DIS
-from classes.action_state import Discounted_gain_soft_horizon_TSAS
+from classes.action_state import Discounted_gain_soft_horizon_TSAS, Undiscounted_gain_hard_horizon_TSAS
 from classes.sensory_state import Omniscient_ST
 
 from classes.experiment import Experiment
 
 from methods.policies import softmax_policy_init
+from methods.empirical_priors import discrete_empirical_priors
 
-## Parameters
-N = 100
-K = 3
-links = [-1, -0.5, 0, 0.5, 1]
-theta = 0.5
-dt = 0.2
-sigma = 1 
 
-flat_prior = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
-flat_prior = np.tile(flat_prior, (6, 1))
+def main():
+    ## Import behavioural experiment
+    with open('/home/vbtesh/Documents/CompProjects/vbtCogSci/csl2analysis/data/csl_2_modelling_data.obj', 'rb') as inFile:
+        modelling_data = pickle.load(inFile)
 
-## TRUE MODEL
-true_model = np.array([-1, 0, 0, -1, 0, 0])
 
-# Action parameters
-C = 1
+    part_key = '5ef109c89196fa6d5cf6c005'
+    conditions = ['generic', 'congruent', 'incongruent', 'implausible']
+    cond = conditions[2]
+    
 
-poss_actions = np.arange(-100, 100)
-poss_actions = np.array([85, 45, 0, -45, -85])
-#actions = np.arange(-100, 100)
-#actions = np.array([-80, 80])
-action_len = 5
+    # Model fitting
+    fitting = True # If false, no data will be used 
 
-policy, policy_pmf = softmax_policy_init(1)
-#policy = epsilon_greedy_init(0.50)
+    if fitting:
+        ## Data from trial
+        part_data = modelling_data[part_key]['trials'][cond]
+        print(part_data.keys())
 
-idle = True
-epsilon = 1e-2 # Certainty threshold: agent stops intervening after entropy goes below epsilon
+        posterior = part_data['posterior']
+        data = part_data['data']
+        inters = part_data['inters']
+        inters_fit = part_data['inters_fit']
 
-knowledge = False  # Can be a model as nd.array, True for perfect knowledge, 'random' for random sampling and False for posterior based sampling
-knowledge = true_model
 
-horizon = 1e-1
-discount = 0.1
-depth = 2
+    # General model parameters (true for all trials)
+    if fitting:
+        N = data.shape[0] - 1
+        K = data.shape[1]
+    else:
+        N = 100
+        K = 3
+    links = np.array([-1, -0.5, 0, 0.5, 1])
+    theta = 0.5
+    dt = 0.2
+    sigma = 1 
 
-behaviour = 'random'   # Can be 'obs', 'random' or 'actor'
 
-## Initialise key objects
-external_state = OU_Network(N, K, true_model, theta, dt, sigma)
+    # Set up priors
+    flat_prior = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
+    flat_prior = np.tile(flat_prior, (6, 1))
 
-sensory_state = Omniscient_ST(N, K)
-action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, idle, action_len, policy, policy_pmf, epsilon, C, knowledge, discount, horizon)
-internal_state = Normative_DIS(N, K, flat_prior, links, dt, theta, sigma, sample_params=True)
+    random_prior = np.random.rand(6, 5)
 
-agent = Agent(N, sensory_state, internal_state, action_state)
+    prior_perfect = np.array([[1, 0, 0, 0, 0],
+                             [0, 0, 1, 0, 0],
+                             [0, 0, 1, 0, 0],
+                             [1, 0, 0, 0, 0],
+                             [0, 0, 1, 0, 0],
+                             [0, 0, 1, 0, 0]])
+    # Emprical Priors
+    part_map = part_data['prior'] # Participant's maximum a priori
+    temp = 3/2 # Must be explored further
+    empirical_priors, entropy = discrete_empirical_priors(part_map, links, temp)
+    ## Final prior assignment
+    prior = empirical_priors
 
-experiment = Experiment(agent, external_state)
+    # Prior sample size
+    ## MUST BE 1 WHEN USING EMPIRICAL PRIORS
+    prior_sample_size = 1
 
-# Run experiment
-experiment.run()
+    #print(prior**prior_sample_size)
+
+    # Ground truth model
+    ## Import from behavioural experiment
+    gt_behavioural_exp = part_data['ground_truth']
+    ## Any model as np.ndarray
+    custom_model = np.array([-1, 0, .0, -1, 0, 0])
+    ## Final ground truth assignment
+    true_model = gt_behavioural_exp
+
+    # Action parameters
+    ## Number of model to sample from the posterior
+    C = 3
+    ## Different action possibility
+    poss_actions = np.arange(-100, 100)
+    poss_actions = np.array([85, 45, 0, -45, -85])
+    poss_actions = np.arange(-100, 101, step=10)
+    ## Define action length (TO BE REFINED FOR FITTING DATA)
+    action_len = 5 
+    ## Policy for action selection from action values
+    policy_funcs = softmax_policy_init(1) # Returns three function: sample, pmf, params
+    ## Parameters
+    epsilon = 1e-2 # Certainty threshold: agent stops intervening after entropy goes below epsilon
+    knowledge = False  # Can be a model as nd.array, True for perfect knowledge, 'random' for random sampling and False for posterior based sampling
+    ## Special parameters for tree searches
+    horizon = 1e-2 # For soft horizon discounted gain
+    discount = 0.01 # For soft horizon discounted gain
+    depth = 1 # Horizon for hard horizon undiscounted gain
+    ## General behaviour parameter
+    behaviour = 'actor'   # Can be 'obs', 'random' or 'actor'
+    
+    sensory_state = Omniscient_ST(N, K)
+    action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon)
+    action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)
+    internal_state = Normative_DIS(N, K, prior, prior_sample_size, links, dt, theta, sigma, sample_params=True)
+
+    agent = Agent(N, sensory_state, internal_state, action_state)
+
+    if fitting:
+        external_state = OU_Network(N, K, true_model, theta, dt, sigma, data=data, inters=inters, inters_fit=inters_fit)
+    else:
+        external_state = OU_Network(N, K, true_model, theta, dt, sigma)
+
+    experiment = Experiment(agent, external_state)
+
+    # Run experiment
+    if fitting:
+        experiment.fit(posterior)
+    else:
+        experiment.run()
+
+if __name__ == '__main__':
+    main()
 
 pass
+

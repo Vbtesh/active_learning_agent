@@ -18,6 +18,11 @@ class Internal_state():
         self._p_i_g_s_i = update_func
         self._p_i_g_s_i_args = update_func_args
 
+        # Maintain a log likelihood for fitting
+        self._log_likelihood = 0
+        self._log_likelihood_history = np.zeros(self._N+1)
+        
+
     
     # General update function that all internal state object must satisfy
     ## Parameters can change but there must always be current set of posterior parameters & a history of the parameters at each time step
@@ -118,6 +123,10 @@ class Discrete_IS(Internal_state):
         return self._likelihood(self._posterior_params)
 
     @property
+    def posterior_over_links(self):
+        return self._models_to_links(self.posterior)
+
+    @property
     def map(self):
         graph_idx = np.argmax(self.posterior)
         return self._sample_space[graph_idx]
@@ -130,7 +139,6 @@ class Discrete_IS(Internal_state):
     def entropy_history(self):
         posterior_history = self._likelihood(self._posterior_params_history)
         return self._entropy(posterior_history)
-
 
 
     # Samples the posterior, the number of samples is given by the size parameter
@@ -146,8 +154,12 @@ class Discrete_IS(Internal_state):
             return self._sample_space[graph_idx].squeeze()
 
     # PMF of the posterior for a given graph
-    def posterior_PMF(self, graph):
-        return self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]]
+    def posterior_PMF(self, graph, log=False):
+        if not log:
+            return self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]]
+        else:  
+            return np.log(self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]])
+
 
     # Background methods for likelihood and sampling for discrete distributions
     def _likelihood(self, log_likelihood):
@@ -212,8 +224,6 @@ class Discrete_IS(Internal_state):
             return S_mat
 
     
-
-
 # Normative agent
 class Normative_DIS(Discrete_IS):
     def __init__(self, N, K, prior_params, prior_sample_size, links, dt, theta, sigma, sample_params=True):
@@ -229,8 +239,6 @@ class Normative_DIS(Discrete_IS):
         self._mus_history = [None for i in range(self._N)]
 
         
-
-
     # Update rule
     def _update_rule(self, sensory_state, intervention=None):
         obs = sensory_state.s
@@ -264,6 +272,7 @@ class Normative_DIS(Discrete_IS):
     def _update_mus(self, obs):
         self._mus_history[self._n] = self._mus
         self._mus = self._attractor_mu(obs)
+
 
     def _attractor_mu(self, obs): 
         att_mu =  obs @ self._sample_space_as_mat 

@@ -6,11 +6,9 @@ from numpy.random.mtrand import uniform
 class Action_state():
     def __init__(self, N, K, 
                           behaviour,
-                          possible_actions, 
-                          idle,
+                          possible_actions,
                           action_len, 
-                          policy,
-                          pmf_policy, 
+                          policy_funcs,
                           epsilon, 
                           action_value_func):
 
@@ -19,24 +17,26 @@ class Action_state():
         self._K = K
         self._behaviour = behaviour
 
-        if idle:
-            self._num_actions = self._K * len(possible_actions) + 1
-        else:
-            self._num_actions = self._K * len(possible_actions)
+        # Num of possible action is all possible values for all variable plus 1 for staying idle
+        self._num_actions = self._K * len(possible_actions) + 1
+
+        self._action_grid = np.arange(self._K * len(possible_actions)).reshape(self._K, len(possible_actions))
 
         self._poss_actions = possible_actions
         self._action_len = action_len
         self._action_idx = 0
-        self._current_action = None
+        self._current_action = self._num_actions # Represents the index of doing nothing, i.e. None, in list form 
 
         # Certainty parameter, stops intervening when posterior entropy is below the threshold
         self._epsilon = epsilon
  
         # A function that takes action values as arguments and return an sequence of actions which is then remapped onto action_seqs and then split using the remap_action function
         # Argument must be action values over all possible actions
-        self._policy = policy 
+        self._policy = policy_funcs[0]
         # Return the probability of taking an action given the current action values
-        self._pmf_policy = pmf_policy
+        self._pmf_policy = policy_funcs[1]
+        # Return the parameters of the policy given the the current action values
+        self._params_policy = policy_funcs[2]
 
         # Action value function
         # Arguments must be: action_state or self, external_state, sensory_state, internal_state
@@ -44,6 +44,7 @@ class Action_state():
 
         # Action values history
         self._action_values = [None for i in range(self._N+1)]
+        self._action_seqs_values = [None for i in range(self._N+1)]
         self._action_seqs = [None for i in range(self._N+1)]
 
         self._planned_actions = [None for i in range(self._N+1)]
@@ -66,24 +67,76 @@ class Action_state():
                 self._current_action = self._remap_action(np.random.choice(self._num_actions))
             else:
                 # Do simulation to estimate action values if policy is not random
-                self._action_values[self._n], action_seqs = self._compute_action_values(external_state, sensory_state, internal_state)
+                seqs_values, seqs = self._compute_action_values(external_state, sensory_state, internal_state)
+
                 # Sample a sequence of actions
-                sampled_sequence_idx = self._policy(self._action_values[self._n])
+                sampled_sequence_idx = self._policy(seqs_values)
 
                 # Sample an sequence of actions from a policy function
-                action_sequence = action_seqs[sampled_sequence_idx]
+                action_sequence = seqs[sampled_sequence_idx]
 
-                print('argmax:', np.argmax(self._action_values[self._n]), 'argmax seq:', action_seqs[np.argmax(self._action_values[self._n])], 'sampled action:', sampled_sequence_idx, 'sampled sequence:', action_sequence)
+                print('argmax:', np.argmax(self._action_values[self._n]), 'argmax seq:', seqs[np.argmax(self._action_values[self._n])], 'sampled action:', sampled_sequence_idx, 'sampled sequence:', action_sequence)
 
                 action_seq_int = [int(a) for a in action_sequence.split(',')]
                 self._planned_actions[self._n] = action_seq_int
-                self._current_action = self._remap_action(action_seq_int[0])             
+                self._current_action = self._remap_action(action_seq_int[0])  
+
+                # Update hitory
+                self._action_values[self._n] = self._average_over_sequences(seqs_values, seqs)
+                self._action_seqs_values[self._n] = seqs_values
+                self._action_seqs[self._n] = seqs           
 
             # Reset action idx
             self._action_idx = 0
 
         self._n += 1
         return self._current_action
+    
+
+    # Fit action to action states
+    def fit(self, action, action_fit, external_state, sensory_state, internal_state):
+        if self._behaviour == 'obs':
+            self._n += 1
+            return np.inf # Log probability of acting given that the person is an observer is necessarily - infinity
+
+        # If action and action fit are different, do not penalise log likelihood
+        if action and not action_fit:
+            return 0
+        
+        # Constraint actual action
+        constrained_action = self._constrain_action(action)
+        flat_action = self._flatten_action(constrained_action)
+
+        if self._behaviour == 'random':
+            # If behaviour is random, simply return the probability of taking any action
+            self._action_idx = 0
+            self._current_action = flat_action
+            self._planned_actions[self._n] = flat_action
+            self._n += 1
+
+            action_prob = 1 / self._num_actions
+            return np.log(action_prob)
+        else:
+            # Else do simulation to estimate action values if policy is not random
+            seqs_values, seqs = self._compute_action_values(external_state, sensory_state, internal_state)
+                
+            # Average over values
+            action_values = self._average_over_sequences(seqs_values, seqs)
+
+            # Compute policy params
+            action_prob = self._pmf_policy(flat_action, action_values)
+
+            # Update hitory
+            self._action_values[self._n] = action_values
+            self._action_seqs_values[self._n] = seqs_values
+            self._action_seqs[self._n] = seqs  
+               
+            self._action_idx = 0
+            self._current_action = flat_action
+            self._planned_actions[self._n] = flat_action
+            self._n += 1
+
+            return np.log(action_prob)
 
 
     # Rollback action state
@@ -94,6 +147,7 @@ class Action_state():
 
             # Reset Action values history, Action seq hist and planned actions
             self._action_values = [None for i in range(self._N+1)]
+            self._action_seqs_values = [None for i in range(self._N+1)]
             self._action_seqs = [None for i in range(self._N+1)]
             self._planned_actions = [None for i in range(self._N+1)]
         else:
@@ -102,6 +156,7 @@ class Action_state():
             # Reset Action values, seq and planned action from n to N
             for n in range(self._n+1, self._N+1):
                 self._action_values[n] = None
+                self._action_seqs_values[n] = None
                 self._action_seqs[n] = None
                 self._planned_actions[n] = None
 
@@ -116,12 +171,43 @@ class Action_state():
 
             return (variable_idx, variable_value)
 
+    def _flatten_action(self, action):
+        if not action:
+            return self._num_actions - 1
+        else:    
+            value_idx = np.argmax(np.where(self._poss_actions == action[1])[0])
+            return self._action_grid[action[0], value_idx]
+
+    # Evaluate action similarity
+    def _action_check(self, action_1, action_2):
+        if self._constrain_action(action_2) == self._constrain_action(action_1):
+            return True
+        else:
+            False
+
+
+    def _constrain_action(self, action):
+        if not action:
+            return None
+        else:
+            set_value_idx = np.argmin(np.abs(self._poss_actions - action[1]))
+            return (action[0], self._poss_actions[set_value_idx])
+
+
+    def _average_over_sequences(self, seqs_values, seqs):
+        first_action_in_seq = np.array([int(seq.split(',')[0]) for seq in seqs])
+        action_values = np.zeros(self._num_actions)
+        for i in range(self._num_actions):
+            action_values[i] = seqs_values[first_action_in_seq == i].sum()
+
+        return action_values
+
 
 
 # Tree search action selection
 class Treesearch_AS(Action_state):
-    def __init__(self, N, K, behaviour, possible_actions, idle, action_len, policy, pmf_policy, epsilon, C, knowledge, tree_search_func, tree_search_func_args=[]):
-        super().__init__(N, K, behaviour, possible_actions, idle, action_len, policy, pmf_policy, epsilon, self._tree_search_action_values)
+    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, tree_search_func, tree_search_func_args=[]):
+        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, self._tree_search_action_values)
 
         self._tree_search_func = tree_search_func
         self._tree_search_func_args = tree_search_func_args
@@ -203,9 +289,9 @@ class Treesearch_AS(Action_state):
 
 # Undiscounted gain hard horizon
 class Undiscounted_gain_hard_horizon_TSAS(Treesearch_AS):
-    def __init__(self, N, K, behaviour, possible_actions, idle, action_len, policy, pmf_policy, epsilon, C, knowledge, depth):
+    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, depth):
         self._depth = depth
-        super().__init__(N, K, behaviour, possible_actions, idle, action_len, policy, pmf_policy, epsilon, C, knowledge, self._build_tree_ughh, tree_search_func_args=[self._depth])
+        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, self._build_tree_ughh, tree_search_func_args=[self._depth])
 
     
     def _build_tree_ughh(self, gain, external_state, sensory_state, internal_state, gain_update_rule, depth, seq=''):
@@ -236,12 +322,12 @@ class Undiscounted_gain_hard_horizon_TSAS(Treesearch_AS):
 
 # Discounted gain soft horizon
 class Discounted_gain_soft_horizon_TSAS(Treesearch_AS):
-    def __init__(self, N, K, behaviour, possible_actions, idle, action_len, policy, pmf_policy, epsilon, C, knowledge, discount, horizon):
+    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon):
 
         self._discount = discount 
         self._horizon = horizon
 
-        super().__init__(N, K, behaviour, possible_actions, idle, action_len, policy, pmf_policy, epsilon, C, knowledge, self._build_tree_dgsh, tree_search_func_args=[discount, horizon])
+        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, self._build_tree_dgsh, tree_search_func_args=[discount, horizon])
 
     
     def _build_tree_dgsh(self, gain, external_state, sensory_state, internal_state, gain_update_rule, discount, horizon, depth=0, seq=''):

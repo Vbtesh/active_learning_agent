@@ -22,6 +22,10 @@ class Agent():
         # Internal states: must be an Internal_state object
         self._internal_state = internal_state
 
+        # Log likelihood
+        self._log_likelihood = 0
+        self._log_likelihood_history = np.zeros(self._N + 1)
+
         
     # Core methods
     ## Learn
@@ -42,6 +46,25 @@ class Agent():
                                            deepcopy(self._internal_state))
 
         return action
+
+    # Fit action
+    def fit_action(self, external_state, action, action_fit):
+
+        log_prob_action = self._action_state.fit(action, 
+                                                 action_fit,
+                                                 deepcopy(external_state), 
+                                                 deepcopy(self._sensory_state), 
+                                                 deepcopy(self._internal_state))
+
+        self._log_likelihood_history[self._n] = self._log_likelihood
+        self._log_likelihood += log_prob_action
+        return log_prob_action
+
+    # Fit judgement
+    def fit_judgement(self, judgement):
+        log_prob_judgement = self._internal_state.posterior_PMF(judgement, log=True)
+        self._log_likelihood_history[self._n] = self._log_likelihood
+        self._log_likelihood += log_prob_judgement
 
 
     # Resets the agent by rolling back all states
@@ -66,6 +89,10 @@ class Agent():
     @property
     def action_state(self):
         return self._action_state
+
+    @property
+    def log_likelihood(self):
+        return self._log_likelihood
 
 
     # Reports
