@@ -18,6 +18,11 @@ class Internal_state():
         self._p_i_g_s_i = update_func
         self._p_i_g_s_i_args = update_func_args
 
+        # Maintain a log likelihood for fitting
+        self._log_likelihood = 0
+        self._log_likelihood_history = np.zeros(self._N+1)
+        
+
     
     # General update function that all internal state object must satisfy
     ## Parameters can change but there must always be current set of posterior parameters & a history of the parameters at each time step
