@@ -26,6 +26,7 @@ class Agent():
         self._log_likelihood = 0
         self._log_likelihood_history = np.zeros(self._N + 1)
 
+
         
     # Core methods
     ## Learn
@@ -38,6 +39,17 @@ class Agent():
 
         self._n += 1
 
+    ## Learn fit 
+    def fit_learn(self, external_state, intervention=None):
+        # Observe new external state
+        self._sensory_state.observe(external_state, self._internal_state)
+
+        # Update internal states
+        log_prob_judgement = self._internal_state.update(self._sensory_state, intervention=intervention)
+
+        self._log_likelihood += log_prob_judgement
+        self._n += 1
+
     ## Act by sampling an action
     def act(self, external_state):
         # Sample new action
@@ -48,11 +60,9 @@ class Agent():
         return action
 
     # Fit action
-    def fit_action(self, external_state, action, action_fit):
+    def fit_action(self, external_state):
 
-        log_prob_action = self._action_state.fit(action, 
-                                                 action_fit,
-                                                 deepcopy(external_state), 
+        log_prob_action = self._action_state.fit(deepcopy(external_state), 
                                                  deepcopy(self._sensory_state), 
                                                  deepcopy(self._internal_state))
 
@@ -74,6 +84,10 @@ class Agent():
         self._action_state.rollback()
 
     # Properties
+    @property
+    def a(self):
+        return self._action_state.a
+    
     @property
     def states(self):
         return self._sensory_state, self._internal_state, self._action_state

@@ -5,10 +5,7 @@ import seaborn as sns
 
 class OU_Network():
     def __init__(self, N, K, true_model, theta, dt, sigma, 
-                                                    init_state=None, 
-                                                    data=None, 
-                                                    inters=None, 
-                                                    inters_fit=None,
+                                                    init_state=None,
                                                     range_values=(-100, 100)):
         # Parameters
         if len(true_model.shape) > 1:
@@ -32,33 +29,15 @@ class OU_Network():
         self._self_att = np.zeros((self._N+1, self._K))
         self._mu_att = np.zeros((self._N+1, self._K))
 
-        if type(data) == np.ndarray:
-            self._X = data
-            self._N = data.shape[0] - 1
-            if type(inters) == np.ndarray:
-                self._I = inters # Intervention must be the same length as data and contain the indexes corresponding to the variables intervened upon
-                # If inters_fit is given, assign it, otherwise, it is the same as inters
-                if type(inters_fit) == np.ndarray:
-                    self._I_fit = inters_fit
-                else:
-                    self._I_fit = inters
-            else:
-                self._I = np.empty(self._N)
-                self._I[:] = np.nan
-                self._I_fit = self._I
+        self._X = np.zeros((N+1, K))
+        # If state is non initial, set the first row of the X matrix to be the initial state
+        if type(init_state) == np.ndarray:
+            self._X[0,:] = init_state
+        # Initialise array of empty interventions
+        self._I = np.empty(self._N+1)
+        self._I[:] = np.nan
 
-            self._realised = True
-        else:
-            self._X = np.zeros((N+1, K))
-            # If state is non initial, set the first row of the X matrix to be the initial state
-            if type(init_state) == np.ndarray:
-                self._X[0,:] = init_state
-
-            # Initialise array of empty interventions
-            self._I = np.empty(self._N+1)
-            self._I[:] = np.nan
-
-            self._realised = False
+        self._realised = False
             
     
     def run(self, iter=1, interventions=None, reset=False):
@@ -89,8 +68,11 @@ class OU_Network():
 
 
     def update(self, intervention=None):
-        # If the data already exists, simply increase index and return
+        # If the data already exists, simply record the action, increase index and return
         if self._realised:
+            if isinstance(intervention, tuple) and np.sum(np.isnan(np.array(intervention))) == 0:
+                inter_var = int(intervention[0])
+                self._I[self._n+1] = inter_var
             self._n +=1
             return
 
@@ -120,6 +102,14 @@ class OU_Network():
 
         # Increment index      
         self._n += 1
+
+
+    # Load data
+    def load_trial_data(self, variables_values):
+        self._X = variables_values
+        self._N = variables_values.shape[0] - 1
+
+        self._realised = True
 
 
     def reset(self, back=np.inf, save=True):
@@ -208,26 +198,6 @@ class OU_Network():
     @property
     def x_prev(self):
         return self._X[self._n-1,:]
-
-    @property
-    def a(self):
-        if np.isnan(self._I[self._n]):
-            return None
-        else: 
-            action = int(self._I[self._n])
-            return (action, self.x[action])
-
-    @property
-    def a_fit(self):
-        if np.isnan(self._I_fit[self._n]):
-            return None
-        else:
-            action = int(self._I_fit[self._n])
-            return (action, self.x[action])
-
-    @property
-    def inters(self):
-        return self._I[0:self._n+1]
 
     @property
     def history(self):

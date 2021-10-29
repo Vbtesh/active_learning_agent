@@ -15,7 +15,7 @@ from methods.empirical_priors import discrete_empirical_priors
 
 def main():
     ## Import behavioural experiment
-    with open('/home/vbtesh/Documents/CompProjects/vbtCogSci/csl2analysis/data/csl_2_modelling_data.obj', 'rb') as inFile:
+    with open('/home/vbtesh/documents/CompProjects/vbtCogSci/csl2analysis/data/csl_2_modelling_data.obj', 'rb') as inFile:
         modelling_data = pickle.load(inFile)
 
 
@@ -26,7 +26,6 @@ def main():
 
     # Model fitting
     fitting = True # If false, no data will be used 
-
     if fitting:
         ## Data from trial
         part_data = modelling_data[part_key]['trials'][cond]
@@ -36,6 +35,7 @@ def main():
         data = part_data['data']
         inters = part_data['inters']
         inters_fit = part_data['inters_fit']
+        judgement_data = part_data['links_hist']
 
 
     # General model parameters (true for all trials)
@@ -56,6 +56,7 @@ def main():
     flat_prior = np.tile(flat_prior, (6, 1))
 
     random_prior = np.random.rand(6, 5)
+    random_prior = random_prior / random_prior.sum(axis=1).reshape((6, 1))
 
     prior_perfect = np.array([[1, 0, 0, 0, 0],
                              [0, 0, 1, 0, 0],
@@ -105,17 +106,19 @@ def main():
     ## General behaviour parameter
     behaviour = 'actor'   # Can be 'obs', 'random' or 'actor'
     
+
     sensory_state = Omniscient_ST(N, K)
     action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon)
     action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)
-    internal_state = Normative_DIS(N, K, prior, prior_sample_size, links, dt, theta, sigma, sample_params=True)
+    internal_state = Normative_DIS(N, K, prior, prior_sample_size, links, dt, theta, sigma, sample_params=False)
+    external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 
     agent = Agent(N, sensory_state, internal_state, action_state)
 
     if fitting:
-        external_state = OU_Network(N, K, true_model, theta, dt, sigma, data=data, inters=inters, inters_fit=inters_fit)
-    else:
-        external_state = OU_Network(N, K, true_model, theta, dt, sigma)
+        external_state.load_trial_data(data)
+        action_state.load_action_data(inters, inters_fit, data)
+        internal_state.load_judgement_data(judgement_data, posterior)
 
     experiment = Experiment(agent, external_state)
 
@@ -124,6 +127,8 @@ def main():
         experiment.fit(posterior)
     else:
         experiment.run()
+
+
 
 if __name__ == '__main__':
     main()

@@ -29,19 +29,16 @@ class Experiment():
 
         for n in range(self._N):
             # Collect action and action to fit
-            a = self.external_state.a
-            a_fit = self.external_state.a_fit
-
-            #print(a, a_fit)
+            a = self.agent.a
 
             # Fit action to fit
-            self.agent.fit_action(self.external_state, a, a_fit)
+            self.agent.fit_action(self.external_state)
 
             # Update external state using action
-            x = self.external_state.run(interventions=a)
+            self.external_state.run(interventions=a)
 
             # Learn from the new state
-            self.agent.learn(self.external_state, intervention=a)
+            self.agent.fit_learn(self.external_state, intervention=a)
 
             if n % 10 == 0:
                 print('Iter:', n, 'Current MAP:', self.agent.internal_state.map, 'Current LL:', self.agent.log_likelihood)

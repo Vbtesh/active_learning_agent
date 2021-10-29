@@ -21,17 +21,47 @@ class Internal_state():
         # Maintain a log likelihood for fitting
         self._log_likelihood = 0
         self._log_likelihood_history = np.zeros(self._N+1)
+
+        self._realised = False
         
 
     
     # General update function that all internal state object must satisfy
     ## Parameters can change but there must always be current set of posterior parameters & a history of the parameters at each time step
     def update(self, sensory_state, intervention=None):
-        self._posterior_params = self._p_i_g_s_i(sensory_state, intervention, *self._p_i_g_s_i_args)
-        self._n += 1
         self._posterior_params_history[self._n] = self._posterior_params
 
+        self._posterior_params = self._p_i_g_s_i(sensory_state, intervention, *self._p_i_g_s_i_args)
+        
+        self._n += 1
+        
+        if self._realised:
+            # Update history
+            self._log_likelihood_history[self._n] = self._log_likelihood
 
+            j_data = self._judgement_data[self._n-1, :]
+            if np.sum(np.isnan(j_data) != True) > 0:
+                link_idx = np.argmax(np.isnan(j_data) != True)
+                link_value = j_data[link_idx]
+
+                judgement_log_prob = self.posterior_PMF_link(link_idx, link_value, log=True)
+
+                self._log_likelihood += judgement_log_prob
+                return judgement_log_prob
+            else:
+                return 0
+        
+
+    def load_judgement_data(self, judgement_data, final_judgement):
+        self._judgement_data = judgement_data
+        self._final_judgement = final_judgement
+
+        self._log_likelihood = 0
+        self._log_likelihood_history = np.zeros(self._N + 1)
+
+        self._realised = True
+
+    
     # Roll back internal state by a given number of step
     ## Used mostly for action selection
     def rollback(self, back=np.Inf):
@@ -45,6 +75,7 @@ class Internal_state():
             # Reset Action values, seq and planned action from n to N
             for n in range(self._n+1, self._N+1):
                 self._posterior_params_history[n] = None
+                
 
     # Utility functions
     def _init_priors(self):
@@ -160,6 +191,16 @@ class Discrete_IS(Internal_state):
         else:  
             return np.log(self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]])
 
+    # PMF of the posterior for a given link
+    def posterior_PMF_link(self, link_idx, link_value, log=False):
+        value_idx = np.squeeze(np.where(self._L == link_value)[0])
+        if not log:
+            prob = self.posterior_over_links[link_idx, value_idx]
+            return prob
+        else:
+            log_prob = np.log(self.posterior_over_links[link_idx, value_idx])
+            return log_prob
+
 
     # Background methods for likelihood and sampling for discrete distributions
     def _likelihood(self, log_likelihood):
@@ -231,7 +272,7 @@ class Normative_DIS(Discrete_IS):
 
         # Transfrom priors from links to graph representation
         prior = self._links_to_models(prior_params)
-        self._prior_params = np.log(prior, where=prior!=0) * prior_sample_size
+        self._prior_params = np.log(prior) * prior_sample_size
         self._init_priors()
 
         self._mus = self._attractor_mu(np.zeros(self._K))

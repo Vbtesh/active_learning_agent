@@ -49,6 +49,9 @@ class Action_state():
 
         self._planned_actions = [None for i in range(self._N+1)]
 
+        # Set realised to False by default
+        self._realised = False
+
 
     # Core method, samples an action by computing action values and selecting one action according to the given policy
     def sample(self, external_state, sensory_state, internal_state):
@@ -94,17 +97,25 @@ class Action_state():
     
 
     # Fit action to action states
-    def fit(self, action, action_fit, external_state, sensory_state, internal_state):
+    ## Needs action data to be loaded to function
+    def fit(self, external_state, sensory_state, internal_state): 
+        
         if self._behaviour == 'obs':
+    
             self._n += 1
-            return np.inf # Log probability of acting given that the person is an observer is necessarily - infinity
+            self._log_likelihood -= np.inf
+            self._log_likelihood_history[self._n] = self._log_likelihood
+            return - np.inf  # Log probability of acting given that the person is an observer is necessarily - infinity
 
         # If action and action fit are different, do not penalise log likelihood
-        if action and not action_fit:
+        if self.a and not self.a_fit:
+            self._n += 1
+            self._log_likelihood += 0
+            self._log_likelihood_history[self._n] = self._log_likelihood
             return 0
         
         # Constraint actual action
-        constrained_action = self._constrain_action(action)
+        constrained_action = self._constrain_action(self.a)
         flat_action = self._flatten_action(constrained_action)
 
         if self._behaviour == 'random':
@@ -114,8 +125,11 @@ class Action_state():
             self._planned_actions[self._n] = flat_action
             self._n += 1
 
-            action_prob = 1 / self._num_actions
-            return np.log(action_prob)
+            action_log_prob = np.log(1 / self._num_actions)
+
+            self._log_likelihood += action_log_prob
+            self._log_likelihood_history[self._n] = self._log_likelihood
+            return action_log_prob
         else:
             # Else do simulation to estimate action values if policy is not random
             seqs_values, seqs = self._compute_action_values(external_state, sensory_state, internal_state)
@@ -126,6 +140,9 @@ class Action_state():
             # Compute policy params
             action_prob = self._pmf_policy(flat_action, action_values)
 
+            # Log of probability of action
+            action_log_prob = np.log(action_prob)
+
             # Update hitory
             self._action_values[self._n] = action_values
             self._action_seqs_values[self._n] = seqs_values
@@ -134,11 +151,29 @@ class Action_state():
             self._action_idx = 0
             self._current_action = flat_action
             self._planned_actions[self._n] = flat_action
+            
+            # Record history
+            self._log_likelihood_history[self._n] = self._log_likelihood
+            # Update log likelihood
+            self._log_likelihood += action_log_prob
+
             self._n += 1
 
-            return np.log(action_prob)
+            return action_log_prob
 
 
+    # Load data
+    def load_action_data(self, actions, actions_fit, variables_values):
+        self._A = actions
+        self._A_fit = actions_fit
+        self._X = variables_values
+
+        self._log_likelihood = 0
+        self._log_likelihood_history = np.zeros(self._N + 1)
+
+        self._realised = True
+
+        
     # Rollback action state
     ## Used mostly for action selection
     def rollback(self, back=np.Inf):
@@ -159,6 +194,31 @@ class Action_state():
                 self._action_seqs_values[n] = None
                 self._action_seqs[n] = None
                 self._planned_actions[n] = None
+
+
+    @property
+    def a(self):
+        if np.isnan(self._A[self._n]):
+            return None
+        else: 
+            action = int(self._A[self._n])
+            return (action, self._X[self._n,:][action])
+
+    @property
+    def a_fit(self):
+        if np.isnan(self._A_fit[self._n]):
+            return None
+        else:
+            action = int(self._A_fit[self._n])
+            return (action, self._X[self._n,:][action])
+
+    @property
+    def actions(self):
+        return self._A[0:self._n+1]
+
+    @property
+    def actions_fit(self):
+        return self._A_fit[0:self._n+1]
 
     
     # Return None, for idleness or a tuple (variable index, variable value) otherwise
@@ -279,7 +339,7 @@ class Treesearch_AS(Action_state):
         action = self._remap_action(action_idx)
 
         for n in range(N):
-            x = external_state.run(interventions=action)
+            external_state.run(interventions=action)
             sensory_state.observe(external_state, internal_state)
             internal_state.update(sensory_state, action)
 
