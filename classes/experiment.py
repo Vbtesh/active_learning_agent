@@ -15,7 +15,7 @@ class Experiment():
         self._iter = num_exp
         self._i = 0
 
-        self._entropy_history = np.zeros((self._iter, self._N+1))
+        self._entropy_history = np.zeros((self._iter, self._N))
 
 
     def fit(self, final_judgement):
@@ -23,6 +23,7 @@ class Experiment():
             print('Cannot fit data that does not exists, use Experiment.run instead. Exiting...')
             return
 
+        print('True model:', self.external_state.causal_vector) 
         self.agent.reset()
         self.external_state.reset()
         self._n = 0
@@ -81,7 +82,7 @@ class Experiment():
                 self._n += 1
 
             print('Iter:', n)
-            print('Final MAP:', self.agent.internal_state.map)
+            print('True model:', self.external_state.causal_vector, 'Final MAP:', self.agent.internal_state.map)
 
             self._entropy_history[i, :] = self.agent.internal_state.entropy_history
             self._i += 1

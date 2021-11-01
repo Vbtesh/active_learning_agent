@@ -3,7 +3,7 @@ import pickle
 
 from classes.agent import Agent
 from classes.ou_network import OU_Network
-from classes.internal_state import Normative_DIS
+from classes.internal_state import Normative_DIS, Local_computations_omniscient_DIS, Local_computations_interfocus_DIS
 from classes.action_state import Discounted_gain_soft_horizon_TSAS, Undiscounted_gain_hard_horizon_TSAS
 from classes.sensory_state import Omniscient_ST
 
@@ -25,17 +25,15 @@ def main():
     
 
     # Model fitting
-    fitting = True # If false, no data will be used 
-    if fitting:
-        ## Data from trial
-        part_data = modelling_data[part_key]['trials'][cond]
-        print(part_data.keys())
+    fitting = False # If false, no data will be used 
 
-        posterior = part_data['posterior']
-        data = part_data['data']
-        inters = part_data['inters']
-        inters_fit = part_data['inters_fit']
-        judgement_data = part_data['links_hist']
+    ## Data from trial
+    part_data = modelling_data[part_key]['trials'][cond]
+    posterior = part_data['posterior']
+    data = part_data['data']
+    inters = part_data['inters']
+    inters_fit = part_data['inters_fit']
+    judgement_data = part_data['links_hist']
 
 
     # General model parameters (true for all trials)
@@ -43,7 +41,7 @@ def main():
         N = data.shape[0] - 1
         K = data.shape[1]
     else:
-        N = 100
+        N = 300
         K = 3
     links = np.array([-1, -0.5, 0, 0.5, 1])
     theta = 0.5
@@ -71,10 +69,6 @@ def main():
     ## Final prior assignment
     prior = empirical_priors
 
-    # Prior sample size
-    ## MUST BE 1 WHEN USING EMPIRICAL PRIORS
-    prior_sample_size = 1
-
     #print(prior**prior_sample_size)
 
     # Ground truth model
@@ -83,7 +77,7 @@ def main():
     ## Any model as np.ndarray
     custom_model = np.array([-1, 0, .0, -1, 0, 0])
     ## Final ground truth assignment
-    true_model = gt_behavioural_exp
+    true_model = custom_model
 
     # Action parameters
     ## Number of model to sample from the posterior
@@ -104,13 +98,18 @@ def main():
     discount = 0.01 # For soft horizon discounted gain
     depth = 1 # Horizon for hard horizon undiscounted gain
     ## General behaviour parameter
-    behaviour = 'actor'   # Can be 'obs', 'random' or 'actor'
+    behaviour = 'random'   # Can be 'obs', 'random' or 'actor'
     
 
     sensory_state = Omniscient_ST(N, K)
+    
     action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon)
     action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)
-    internal_state = Normative_DIS(N, K, prior, prior_sample_size, links, dt, theta, sigma, sample_params=False)
+    
+    internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
+    internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
+    internal_state = Local_computations_interfocus_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
+    
     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 
     agent = Agent(N, sensory_state, internal_state, action_state)
@@ -127,7 +126,6 @@ def main():
         experiment.fit(posterior)
     else:
         experiment.run()
-
 
 
 if __name__ == '__main__':
