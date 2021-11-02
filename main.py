@@ -21,11 +21,11 @@ def main():
 
     part_key = '5ef109c89196fa6d5cf6c005'
     conditions = ['generic', 'congruent', 'incongruent', 'implausible']
-    cond = conditions[2]
+    cond = conditions[1]
     
 
     # Model fitting
-    fitting = False # If false, no data will be used 
+    fitting = True # If false, no data will be used 
 
     ## Data from trial
     part_data = modelling_data[part_key]['trials'][cond]
@@ -46,7 +46,7 @@ def main():
     links = np.array([-1, -0.5, 0, 0.5, 1])
     theta = 0.5
     dt = 0.2
-    sigma = 1 
+    sigma = 3
 
 
     # Set up priors
@@ -63,9 +63,13 @@ def main():
                              [0, 0, 1, 0, 0],
                              [0, 0, 1, 0, 0]])
     # Emprical Priors
-    part_map = part_data['prior'] # Participant's maximum a priori
-    temp = 3/2 # Must be explored further
-    empirical_priors, entropy = discrete_empirical_priors(part_map, links, temp)
+    if 'prior' in part_data.keys():
+        part_map = part_data['prior'] # Participant's maximum a priori
+        temp = 5 # Must be explored further
+        empirical_priors, entropy = discrete_empirical_priors(part_map, links, temp)
+    else:
+        empirical_priors = random_prior
+
     ## Final prior assignment
     prior = empirical_priors
 
@@ -77,7 +81,7 @@ def main():
     ## Any model as np.ndarray
     custom_model = np.array([-1, 0, .0, -1, 0, 0])
     ## Final ground truth assignment
-    true_model = custom_model
+    true_model = gt_behavioural_exp
 
     # Action parameters
     ## Number of model to sample from the posterior
@@ -98,7 +102,7 @@ def main():
     discount = 0.01 # For soft horizon discounted gain
     depth = 1 # Horizon for hard horizon undiscounted gain
     ## General behaviour parameter
-    behaviour = 'random'   # Can be 'obs', 'random' or 'actor'
+    behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
     
 
     sensory_state = Omniscient_ST(N, K)
@@ -108,7 +112,7 @@ def main():
     
     internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
     internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
-    internal_state = Local_computations_interfocus_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
+    #internal_state = Local_computations_interfocus_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
     
     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 
@@ -126,6 +130,8 @@ def main():
         experiment.fit(posterior)
     else:
         experiment.run()
+
+    pass
 
 
 if __name__ == '__main__':

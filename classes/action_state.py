@@ -101,11 +101,12 @@ class Action_state():
     def fit(self, external_state, sensory_state, internal_state): 
         
         if self._behaviour == 'obs':
+            # Do not fit actions
     
             self._n += 1
-            self._log_likelihood -= np.inf
+            self._log_likelihood -= 0
             self._log_likelihood_history[self._n] = self._log_likelihood
-            return - np.inf  # Log probability of acting given that the person is an observer is necessarily - infinity
+            return 0  # Log probability of acting given that the person is an observer is necessarily - infinity
 
         # If action and action fit are different, do not penalise log likelihood
         if self.a and not self.a_fit:

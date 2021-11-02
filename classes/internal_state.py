@@ -18,10 +18,6 @@ class Internal_state():
         self._p_i_g_s_i = update_func
         self._p_i_g_s_i_args = update_func_args
 
-        # Maintain a log likelihood for fitting
-        self._log_likelihood = 0
-        self._log_likelihood_history = np.zeros(self._N+1)
-
         self._realised = False
         
 
@@ -39,25 +35,47 @@ class Internal_state():
             # Update history
             self._log_likelihood_history[self._n] = self._log_likelihood
 
+            judgement_log_prob = 0
             j_data = self._judgement_data[self._n-1, :]
+
             if np.sum(np.isnan(j_data) != True) > 0:
                 link_idx = np.argmax(np.isnan(j_data) != True)
                 link_value = j_data[link_idx]
 
                 judgement_log_prob = self.posterior_PMF_link(link_idx, link_value, log=True)
 
-                self._log_likelihood += judgement_log_prob
-                return judgement_log_prob
-            else:
-                return 0
+                self._judgement_current[link_idx] = link_value
+
+            elif self._n == self._N:
+                # Fit final judgement
+                judge_diff = self._judgement_current != self._judgement_final
+
+                
+                for i in range(judge_diff.size):
+                    if judge_diff[i]:
+                        link_idx = i
+                        link_value = self._judgement_final[link_idx]
+
+                        judgement_log_prob += self.posterior_PMF_link(link_idx, link_value, log=True)
+
+                        self._judgement_current[link_idx] = link_value
+
+                print('Fiiting final judgement:', judgement_log_prob)
+
+            self._log_likelihood += judgement_log_prob
+
+            return judgement_log_prob
         
 
     def load_judgement_data(self, judgement_data, final_judgement):
         self._judgement_data = judgement_data
-        self._final_judgement = final_judgement
+        self._judgement_final = final_judgement
+
+        self._judgement_current = np.empty(self._K**2 - self._K)
+        self._judgement_current[:] = np.nan
 
         self._log_likelihood = 0
-        self._log_likelihood_history = np.zeros(self._N)
+        self._log_likelihood_history = np.zeros(self._N+1)
 
         self._realised = True
 
@@ -203,9 +221,9 @@ class Discrete_IS(Internal_state):
     # PMF of the posterior for a given graph
     def posterior_PMF(self, graph, log=False):
         if not log:
-            return self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]]
+            return self.posterior_over_models[np.where((self._sample_space == graph).all(axis=1))[0]]
         else:  
-            return np.log(self.posterior[np.where((self._sample_space == graph).all(axis=1))[0]])
+            return np.log(self.posterior_over_models[np.where((self._sample_space == graph).all(axis=1))[0]])
 
     # PMF of the posterior for a given link
     def posterior_PMF_link(self, link_idx, link_value, log=False):
@@ -316,7 +334,7 @@ class Local_computations_omniscient_DIS(Discrete_IS):
             for j in range(self._K):
                 if i != j:
                     # Likelihood of observed the new values given the previous values for each model
-                    log_likelihood = stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=np.sqrt(self._dt))
+                    log_likelihood = stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=self._sigma*np.sqrt(self._dt))
                     # Normalisation step
                     likelihood_log = log_likelihood - np.amax(log_likelihood)
                     likelihood_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum()
@@ -390,7 +408,7 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                 if i != j:
                     if intervention[0] == i:
                         # Likelihood of observed the new values given the previous values for each model
-                        log_likelihood = stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=np.sqrt(self._dt))
+                        log_likelihood = stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=self._sigma*np.sqrt(self._dt))
                         # Normalisation step
                         likelihood_log = log_likelihood - np.amax(log_likelihood)
                         likelihood_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum()
@@ -449,7 +467,7 @@ class Normative_DIS(Discrete_IS):
         obs = sensory_state.s
 
         # Likelihood of observed the new values given the previous values for each model
-        likelihood_per_var = stats.norm.logpdf(obs, loc=self._mus, scale=np.sqrt(self._dt)) # Compute probabilities
+        likelihood_per_var = stats.norm.logpdf(obs, loc=self._mus, scale=self._sigma*np.sqrt(self._dt)) # Compute probabilities
 
         # Normalisation step
         likelihood_log = likelihood_per_var - np.amax(likelihood_per_var, axis=0)

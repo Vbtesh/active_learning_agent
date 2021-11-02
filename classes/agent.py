@@ -116,7 +116,7 @@ class Agent():
         plt.title('Entropy evolution')
 
     def plot_posterior(self):
-        posterior = self.internal_state.posterior
+        posterior = self.internal_state.posterior_over_models
         ax = sns.lineplot(data=posterior, lw=1.5) # Plot data
         plt.title('Posterior distribution over models')
 

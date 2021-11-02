@@ -46,10 +46,8 @@ class Experiment():
 
             self._n += 1
 
-        #self.agent.fit_judgement(final_judgement)
-        self.agent.fit_judgement(final_judgement)
         print('True model:', self.external_state.causal_vector, 'Posterior:', final_judgement)
-        print('Final posterior', self.agent.internal_state.posterior_over_links)
+        print('Final posterior \n', self.agent.internal_state.posterior_over_links)
         print('Final log likelihood:', self.agent.log_likelihood)
 
 
