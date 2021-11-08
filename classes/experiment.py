@@ -18,7 +18,7 @@ class Experiment():
         self._entropy_history = np.zeros((self._iter, self._N))
 
 
-    def fit(self, final_judgement):
+    def fit(self, console=True):
         if not self.external_state._realised:
             print('Cannot fit data that does not exists, use Experiment.run instead. Exiting...')
             return
@@ -41,17 +41,17 @@ class Experiment():
             # Learn from the new state
             self.agent.fit_learn(self.external_state, intervention=a)
 
-            if n % 10 == 0:
+            if n % 10 == 0 and console:
                 print('Iter:', n, 'Current MAP:', self.agent.internal_state.map, 'Current LL:', self.agent.log_likelihood)
 
             self._n += 1
 
-        print('True model:', self.external_state.causal_vector, 'Posterior:', final_judgement)
+        print('True model:', self.external_state.causal_vector, 'Posterior_judgement:', self.agent.internal_state._judgement_final)
         print('Final posterior \n', self.agent.internal_state.posterior_over_links)
         print('Final log likelihood:', self.agent.log_likelihood)
 
 
-    def run(self):     
+    def run(self, console=True):     
         self._i = 0
 
         for i in range(self._iter):
@@ -70,7 +70,7 @@ class Experiment():
                 #print('Model n:', agent.model._n)
                 #print('external_state n:', external_state._n)
 
-                if n % 10 == 0:
+                if n % 10 == 0 and console:
                     print('Iter:', n)
                     print('Current MAP:', self.agent.internal_state.map)
                     #print('Current posterior:')

@@ -1,11 +1,22 @@
 import numpy as np
+import pandas as pd
 import pickle
 
-from classes.agent import Agent
 from classes.ou_network import OU_Network
-from classes.internal_state import Normative_DIS, Local_computations_omniscient_DIS, Local_computations_interfocus_DIS
-from classes.action_state import Discounted_gain_soft_horizon_TSAS, Undiscounted_gain_hard_horizon_TSAS
-from classes.sensory_state import Omniscient_ST
+
+from classes.internal_states.lc_omniscient_DIS import Local_computations_omniscient_DIS
+from classes.internal_states.normative_DIS import Normative_DIS
+
+from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
+from classes.action_states.undiscounted_gain_hard_horizon_TSAS import Undiscounted_gain_hard_horizon_TSAS
+
+from classes.sensory_states.omniscient_ST import Omniscient_ST
+
+from classes.agent import Agent
+from classes.experiment import Experiment
+
+from methods.policies import softmax_policy_init
+from methods.empirical_priors import discrete_empirical_priors
 
 from classes.experiment import Experiment
 
@@ -48,6 +59,8 @@ def main():
     dt = 0.2
     sigma = 3
 
+    smoothing = 1e-20
+    #smoothing = False
 
     # Set up priors
     flat_prior = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
@@ -110,9 +123,8 @@ def main():
     action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon)
     action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)
     
-    internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
-    internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
-    #internal_state = Local_computations_interfocus_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
+    internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
+    #internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
     
     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 
@@ -127,7 +139,7 @@ def main():
 
     # Run experiment
     if fitting:
-        experiment.fit(posterior)
+        experiment.fit()
     else:
         experiment.run()
 

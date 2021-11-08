@@ -2,12 +2,17 @@ import numpy as np
 import pandas as pd
 import pickle
 
-from classes.agent import Agent
 from classes.ou_network import OU_Network
-from classes.internal_state import Normative_DIS, Local_computations_omniscient_DIS, Local_computations_interfocus_DIS
-from classes.action_state import Discounted_gain_soft_horizon_TSAS, Undiscounted_gain_hard_horizon_TSAS
-from classes.sensory_state import Omniscient_ST
 
+from classes.internal_states.lc_omniscient_DIS import Local_computations_omniscient_DIS
+from classes.internal_states.normative_DIS import Normative_DIS
+
+from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
+from classes.action_states.undiscounted_gain_hard_horizon_TSAS import Undiscounted_gain_hard_horizon_TSAS
+
+from classes.sensory_states.omniscient_ST import Omniscient_ST
+
+from classes.agent import Agent
 from classes.experiment import Experiment
 
 from methods.policies import softmax_policy_init
@@ -32,13 +37,18 @@ def main():
         }
     }
 
-
+    part_idx = 0
     for part_key in modelling_data.keys():
+
+        print('PARTICIPANT', part_idx)
 
         part_data = modelling_data[part_key]['trials']
         
 
         for trial_name in part_data.keys():
+
+            if trial_name == 'generic':
+                continue
         
 
 
@@ -59,7 +69,7 @@ def main():
                 N = data.shape[0] - 1
                 K = data.shape[1]
             else:
-                N = 300
+                N = 150
                 K = 3
             links = np.array([-1, -0.5, 0, 0.5, 1])
             theta = 0.5
@@ -81,9 +91,9 @@ def main():
                                      [0, 0, 1, 0, 0],
                                      [0, 0, 1, 0, 0]])
             # Emprical Priors
-            if fitting and 'prior' in trial_data.keys():
+            if 'prior' in trial_data.keys():
                 part_map = trial_data['prior'] # Participant's maximum a priori
-                temp = 3/2 # Must be explored further
+                temp = 130 # Must be explored further
                 empirical_priors, entropy = discrete_empirical_priors(part_map, links, temp)
             else:
                 empirical_priors = random_prior
@@ -121,13 +131,20 @@ def main():
             behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
 
 
-            sensory_state = Omniscient_ST(N, K)
-            external_state = OU_Network(N, K, true_model, theta, dt, sigma)
+            
 
             for model in datasets.keys():
                 if model == 'normative':
+                    N = 150
+
+                    sensory_state = Omniscient_ST(N, K)
+                    external_state = OU_Network(N, K, true_model, theta, dt, sigma)
+
                     internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
                     for act in datasets[model].keys():
+                        if act == 'obs':
+                            continue
+
                         behaviour = act
                         #action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon)
                         action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)
@@ -143,18 +160,26 @@ def main():
 
                         # Run experiment
                         if fitting:
-                            experiment.fit(posterior)
+                            experiment.fit(console=False)
                         else:
-                            experiment.run()
+                            experiment.run(console=False)
 
                         dist = normalised_euclidean_distance(true_model, internal_state.map)
 
                         datasets[model][act].loc[part_key, trial_name] = dist
 
                 elif model == 'lc':
+                    N = 300
+
+                    sensory_state = Omniscient_ST(N, K)
+                    external_state = OU_Network(N, K, true_model, theta, dt, sigma)
+
                     internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
                     #internal_state = Local_computations_interfocus_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
-                    for act in model.keys():
+                    for act in datasets[model].keys():
+                        if act == 'obs':
+                            continue
+
                         behaviour = act
                         #action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon)
                         action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)
@@ -170,18 +195,23 @@ def main():
 
                         # Run experiment
                         if fitting:
-                            experiment.fit(posterior)
+                            experiment.fit(console=False)
                         else:
-                            experiment.run()
+                            experiment.run(console=False)
 
                         dist = normalised_euclidean_distance(true_model, internal_state.map)
 
                         datasets[model][act].loc[part_key, trial_name] = dist
 
-
+        if part_idx % 20 == 0:
+            for model in datasets.keys():
+                for act in datasets[model].keys():
+                    datasets[model][act].to_csv(f'./data/{model}_{act}_prior100.csv')
+        part_idx += 1
+    
     for model in datasets.keys():
         for act in datasets[model].keys():
-            datasets[model][act].to_csv(f'./data/{model}_{act}.csv')
+            datasets[model][act].to_csv(f'./data/{model}_{act}_prior100.csv')
 
 if __name__ == '__main__':
     main()

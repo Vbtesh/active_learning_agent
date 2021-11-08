@@ -3,8 +3,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from copy import deepcopy
 
-from classes.internal_state import Internal_state
-
 
 class Agent():
     def __init__(self, N, sensory_state, internal_state, action_state):

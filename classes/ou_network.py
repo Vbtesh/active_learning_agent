@@ -112,7 +112,7 @@ class OU_Network():
         self._realised = True
 
 
-    def reset(self, back=np.inf, save=True):
+    def reset(self, back=np.inf, save=False):
         if save:
             self._data_history.append(self._X[0:self._n+1,:]) # Save data in history
             self._inter_history.append(self._X[0:self._n+1])  # Save interventions in history
