@@ -15,7 +15,7 @@ class Local_computations_omniscient_DIS(Discrete_IS):
 
         # Define own attractor mu, should be mu for each given the other two
         self._mus = self._attractor_mu(np.zeros(self._K))
-        self._mus_history = [None for i in range(self._N)]
+        #self._mus_history = [None for i in range(self._N)]
 
         
 

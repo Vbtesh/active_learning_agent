@@ -5,6 +5,7 @@ import pickle
 from classes.ou_network import OU_Network
 
 from classes.internal_states.lc_omniscient_DIS import Local_computations_omniscient_DIS
+from classes.internal_states.lc_omniscient_CIS import Local_computations_omniscient_CIS
 from classes.internal_states.normative_DIS import Normative_DIS
 
 from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
@@ -16,12 +17,9 @@ from classes.agent import Agent
 from classes.experiment import Experiment
 
 from methods.policies import softmax_policy_init
-from methods.empirical_priors import discrete_empirical_priors
+from methods.empirical_priors import generate_discrete_empirical_priors, generate_gaussian_empirical_priors
 
-from classes.experiment import Experiment
 
-from methods.policies import softmax_policy_init
-from methods.empirical_priors import discrete_empirical_priors
 
 
 def main():
@@ -79,12 +77,14 @@ def main():
     if 'prior' in part_data.keys():
         part_map = part_data['prior'] # Participant's maximum a priori
         temp = 5 # Must be explored further
-        empirical_priors, entropy = discrete_empirical_priors(part_map, links, temp)
+        sd = 1
+        discrete_empirical_prior, discrete_prior_entropy = generate_discrete_empirical_priors(part_map, links, temp)
+        continuous_empirical_prior, continuous_prior_entropy = generate_gaussian_empirical_priors(part_map, sd)
     else:
-        empirical_priors = random_prior
+        discrete_empirical_prior = random_prior
 
     ## Final prior assignment
-    prior = empirical_priors
+    prior = discrete_empirical_prior
 
     #print(prior**prior_sample_size)
 
@@ -124,8 +124,9 @@ def main():
     action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)
     
     internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
-    #internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
-    
+    internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
+    internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, dt, theta, sigma)
+
     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 
     agent = Agent(N, sensory_state, internal_state, action_state)

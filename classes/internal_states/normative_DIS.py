@@ -4,7 +4,7 @@ import numpy as np
 
 # Normative discrete agent
 class Normative_DIS(Discrete_IS):
-    def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=False):
+    def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=False, init_obs=None):
         super().__init__(N, K, prior_params, links, dt, theta, sigma, self._update_rule, sample_params=sample_params, smoothing=smoothing)
 
         # Transfrom priors from links to graph representation
@@ -12,7 +12,10 @@ class Normative_DIS(Discrete_IS):
         self._prior_params = np.log(prior)
         self._init_priors()
 
-        self._mus = self._attractor_mu(np.zeros(self._K))
+        if init_obs:
+            self._mus = self._attractor_mu(init_obs)
+        else:
+            self._mus = self._attractor_mu(np.zeros(self._K))
 
         #self._mus_history = [None for i in range(self._N)]
 

@@ -16,7 +16,7 @@ def softmax(d, temp=1):
 
 # Returns the parameters of a discrete empirical prior distribution over links 
 ## Uses the distance softmax rule and a temperature parameter
-def discrete_empirical_priors(prior_judgement, links, temperature):
+def generate_discrete_empirical_priors(prior_judgement, links, temperature):
 
     p_unnormalised = np.zeros((prior_judgement.size, links.size))
     for i in np.arange(prior_judgement.size):
@@ -35,6 +35,11 @@ def discrete_empirical_priors(prior_judgement, links, temperature):
 
 # Returns the paramaters of continuous (Gaussian) empirical prior distribution over links
 ## The only parameter is the standard deviation or the array of standard deviations (one for each links)
-def gaussian_empirical_priors(prior_judgement, sigma):
+def generate_gaussian_empirical_priors(prior_judgement, sigma):
     means = prior_judgement
-    return (means, sigma), stats.norm.entropy(means, sigma)
+    if type(sigma) == np.ndarray:
+        sd = sigma
+    else:
+        sd = sigma * np.ones(means.shape)
+
+    return np.array([means, sd]).T, stats.norm.entropy(means, sigma)

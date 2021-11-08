@@ -5,7 +5,7 @@ import pandas as pd
 from scipy import stats
 from scipy.stats import distributions
 
-from methods.smoothing import smooth
+from methods.smoothing import entropy, smooth
 
 
 # Main Internal state class
@@ -46,7 +46,7 @@ class Internal_state():
                 link_idx = np.argmax(np.isnan(j_data) != True)
                 link_value = j_data[link_idx]
 
-                judgement_log_prob = self.posterior_PMF_link(link_idx, link_value, log=True)
+                judgement_log_prob = self.posterior_PF_link(link_idx, link_value, log=True)
 
                 self._judgement_current[link_idx] = link_value
 
@@ -234,14 +234,14 @@ class Discrete_IS(Internal_state):
             return self._sample_space[graph_idx].squeeze()
 
     # PMF of the posterior for a given graph
-    def posterior_PMF(self, graph, log=False):
+    def posterior_PF(self, graph, log=False):
         if not log:
             return self.posterior_over_models[np.where((self._sample_space == graph).all(axis=1))[0]]
         else:  
             return np.log(self.posterior_over_models[np.where((self._sample_space == graph).all(axis=1))[0]])
 
     # PMF of the posterior for a given link
-    def posterior_PMF_link(self, link_idx, link_value, log=False):
+    def posterior_PF_link(self, link_idx, link_value, log=False):
         value_idx = np.squeeze(np.where(self._L == link_value)[0])
         if not log:
             prob = self.posterior_over_links[link_idx, value_idx]
@@ -362,13 +362,11 @@ class Continuous_IS(Internal_state):
     # Properties
     @property
     def posterior(self):
-        return self._likelihood(self._posterior_params)
-
+        return self._posterior_params
 
     @property
     def map(self):
-        graph_idx = np.argmax(self.posterior_over_models)
-        return self._sample_space[graph_idx]
+        return self._argmax()
 
     @property
     def posterior_entropy(self):
@@ -376,61 +374,46 @@ class Continuous_IS(Internal_state):
     
     @property
     def entropy_history(self):
-        posterior_history = self._likelihood(self._posterior_params_history)
-        return self._entropy(posterior_history)
+        entropy_history = np.zeros(len(self._posterior_params_history))
+        for i in range(entropy_history.size):
+            entropy_history[i] = self._entropy(self._posterior_params_history[i])
+        return entropy_history
 
 
     # Samples the posterior, the number of samples is given by the size parameter
     def posterior_sample(self, size=1, as_matrix=False):
         # Needs to be specifically defined per sub class
-        sample = self._sample_distribution(size=size, params=self._posterior_params)
+        sample = self._sample_distribution(size=size)
             
         if as_matrix:
-            return self._causality_matrix(sample)
+            if size == 1:
+                return self._causality_matrix(sample)
+            else:
+                sample_matrix = np.zeros((size, self._K, self._K))
+                for i in range(size):
+                    sample[i, :, :] = self._causality_matrix(sample[i, :])
+                return sample_matrix
         else:
             return sample
+            
 
     # PMF of the posterior for a given graph
-    def posterior_PDF(self, graph, log=False):
-        # Needs to be specifically defined per sub class
-        pass
+    def posterior_PF(self, graph, log=False):
+        if log:
+            return np.sum(self._pdf(graph, log=log))
+        else:
+            return np.prod(self._pdf(graph, log=log))
+
 
     # PMF of the posterior for a given link
-    def posterior_PDF_link(self, link_idx, link_value, log=False):
+    def posterior_PF_link(self, link_idx, link_value, log=False):
+        return self._link_pdf(link_idx, link_value, log=log)
+        
+
+    def _entropy(self, parameters):
         # Needs to be specifically defined per sub class
-        pass
-
-
-    # Background methods for likelihood and sampling for discrete distributions
-    def _likelihood(self, log_likelihood):
-        # Needs to be specifically defined per sub class
-        # In this context, it should contain the posterior parameters
-        if isinstance(log_likelihood, list):
-            LL = np.array(log_likelihood[0:self._n+1])
-            # Case where likelihood is 2 dimensional (LC) and we want the whole history
-            if len(LL.shape) == 3: 
-                LL_n = LL - np.amax(LL, axis=2).reshape((LL.shape[0], LL.shape[1], 1))
-                return np.squeeze(np.exp(LL_n) / np.sum(np.exp(LL_n), axis=2).reshape((LL.shape[0], LL.shape[1], 1)))
-        else:
-            LL = log_likelihood
-
-        if len(LL.shape) == 1:
-            LL = LL.reshape(1, LL.shape[0])
-        LL_n = LL - np.amax(LL, axis=1).reshape(LL.shape[0], 1)
-        return np.squeeze(np.exp(LL_n) / np.sum(np.exp(LL_n), axis=1).reshape(LL.shape[0], 1))
-    
-
-    def _entropy(self, distribution):
-        # Needs to be specifically defined per sub class
-        log_dist = np.log2(distribution, where=distribution!=0)
-        log_dist[log_dist == -np.inf] = 0
-
-        if len(distribution.shape) == 1 or distribution.shape == (self._K**2 - self._K, self._L.size):
-            return - np.sum(distribution * log_dist)
-        elif len(distribution.shape) == 3:
-            return - np.squeeze(np.sum(distribution * log_dist, axis=2).sum(axis=1))
-        else:
-            return - np.sum(distribution * log_dist, axis=1)
+        return self._entropy_distribution(parameters)
+        
 
 
 
