@@ -53,7 +53,7 @@ class Local_computations_omniscient_DIS(Discrete_IS):
     
     # Background methods
     def _update_mus(self, obs):
-        self._mus_history[self._n] = self._mus
+        #self._mus_history[self._n] = self._mus
         self._mus = self._attractor_mu(obs)
 
     

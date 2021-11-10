@@ -23,7 +23,7 @@ class Local_computations_omniscient_CIS(Continuous_IS):
 
         new_params = np.zeros(self._prior_params.shape)
 
-        mu_self = obs * (1 - np.abs(obs) / 100)
+        mu_self = self._prev_obs * (1 - np.abs(self._prev_obs) / 100)
 
         idx = 0
         for i in range(self._K):
@@ -40,7 +40,8 @@ class Local_computations_omniscient_CIS(Continuous_IS):
                             idx += 1
                             continue
                     
-                    sd = (self._prev_obs[i]**2 / self._dt + 1 / sd_prev)**(-1/2)
+                    sd = (self._prev_obs[i]**2 / self._dt + 1 / sd_prev**2)**(-1/2)
+                    in_between = self._prev_obs[i]*(obs[j] - mu_self[j])
                     mean = sd**2 * (self._prev_obs[i]*(obs[j] - mu_self[j]) / self._dt + mean_prev / sd_prev**2)
 
                     new_params[idx, :] = [mean, sd]
@@ -52,7 +53,7 @@ class Local_computations_omniscient_CIS(Continuous_IS):
 
     
     def _argmax(self):
-        return self._posterior_params[:, 0]
+        return np.round(self._posterior_params[:, 0], 2)
 
     
     def _sample_distribution(self, size=1):
@@ -69,24 +70,26 @@ class Local_computations_omniscient_CIS(Continuous_IS):
 
     
     def _entropy_distribution(self, parameters):
-        return np.sum(stats.norm,entropy(scale=parameters[:, 1]))
+        return np.sum(stats.norm.entropy(scale=parameters[:, 1]))
 
 
     def _pdf(self, obs, log=False):
+        bias = 0
         means = self._posterior_params[:, 0]
         sds = self._posterior_params[:, 1]
         if log:
-            return stats.norm.logpdf(obs, loc=means, scale=sds)
+            return stats.norm.logpdf(obs, loc=means, scale=bias+sds)
         else:
-            return stats.norm.pdf(obs, loc=means, scale=sds)
+            return stats.norm.pdf(obs, loc=means, scale=bias+sds)
 
     
     def _link_pdf(self, link_idx, link_value, log=False):
+        bias = 0
         mean = self._posterior_params[link_idx, 0]
         sd = self._posterior_params[link_idx, 1]
         if log:
-            return stats.norm.logpdf(link_value, loc=mean, scale=sd)
+            return stats.norm.logpdf(link_value, loc=mean, scale=bias+sd)
         else:
-            return stats.norm.pdf(link_value, loc=mean, scale=sd)
+            return stats.norm.pdf(link_value, loc=mean, scale=bias+sd)
 
     

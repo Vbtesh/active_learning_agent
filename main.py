@@ -30,7 +30,7 @@ def main():
 
     part_key = '5ef109c89196fa6d5cf6c005'
     conditions = ['generic', 'congruent', 'incongruent', 'implausible']
-    cond = conditions[1]
+    cond = conditions[0]
     
 
     # Model fitting
@@ -77,11 +77,14 @@ def main():
     if 'prior' in part_data.keys():
         part_map = part_data['prior'] # Participant's maximum a priori
         temp = 5 # Must be explored further
-        sd = 1
+        sd = 1e5
         discrete_empirical_prior, discrete_prior_entropy = generate_discrete_empirical_priors(part_map, links, temp)
         continuous_empirical_prior, continuous_prior_entropy = generate_gaussian_empirical_priors(part_map, sd)
     else:
         discrete_empirical_prior = random_prior
+        sd = 1e5
+        continuous_empirical_prior = np.array([[0, 0, 0, 0, 0, 0],
+                                               [sd, sd, sd, sd, sd, sd]]).T
 
     ## Final prior assignment
     prior = discrete_empirical_prior
@@ -92,9 +95,10 @@ def main():
     ## Import from behavioural experiment
     gt_behavioural_exp = part_data['ground_truth']
     ## Any model as np.ndarray
-    custom_model = np.array([-1, 0, .0, -1, 0, 0])
+    custom_model = np.array([-1, 0.5, .0, -1, 0, 0])
     ## Final ground truth assignment
     true_model = gt_behavioural_exp
+    #true_model = custom_model
 
     # Action parameters
     ## Number of model to sample from the posterior

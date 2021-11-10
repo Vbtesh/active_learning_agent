@@ -60,7 +60,7 @@ class Internal_state():
                         link_idx = i
                         link_value = self._judgement_final[link_idx]
 
-                        judgement_log_prob += self.posterior_PMF_link(link_idx, link_value, log=True)
+                        judgement_log_prob += self.posterior_PF_link(link_idx, link_value, log=True)
 
                         self._judgement_current[link_idx] = link_value
 
@@ -185,11 +185,11 @@ class Discrete_IS(Internal_state):
         posterior = self._likelihood(self._posterior_params)
         if len(posterior.shape) == 1:
             smoothed_posterior = self._links_to_models(self._smooth(self._models_to_links(posterior)))
-            print('Diff:', np.sum(np.abs(posterior - smoothed_posterior)))
+            #print('Diff:', np.sum(np.abs(posterior - smoothed_posterior)))
             return smoothed_posterior
         else:
             smoothed_posterior = self._smooth(posterior)
-            print('Diff:', np.sum(np.abs(posterior - smoothed_posterior)))
+            #print('Diff:', np.sum(np.abs(posterior - smoothed_posterior)))
             return smoothed_posterior
 
     @property

@@ -5,6 +5,7 @@ import pickle
 from classes.ou_network import OU_Network
 
 from classes.internal_states.lc_omniscient_DIS import Local_computations_omniscient_DIS
+from classes.internal_states.lc_omniscient_CIS import Local_computations_omniscient_CIS
 from classes.internal_states.normative_DIS import Normative_DIS
 
 from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
@@ -16,8 +17,9 @@ from classes.agent import Agent
 from classes.experiment import Experiment
 
 from methods.policies import softmax_policy_init
-from methods.empirical_priors import discrete_empirical_priors
+from methods.empirical_priors import generate_discrete_empirical_priors, generate_gaussian_empirical_priors
 from methods.metrics import normalised_euclidean_distance
+
 
 
 def main():
@@ -34,6 +36,10 @@ def main():
         'lc': {
             'obs': pd.DataFrame(columns=columns),
             'random': pd.DataFrame(columns=columns)
+        },
+        'lc_continuous': {
+            'obs': pd.DataFrame(columns=columns),
+            'random': pd.DataFrame(columns=columns)
         }
     }
 
@@ -48,7 +54,7 @@ def main():
         for trial_name in part_data.keys():
 
             if trial_name == 'generic':
-                continue
+                pass
         
 
 
@@ -91,15 +97,20 @@ def main():
                                      [0, 0, 1, 0, 0],
                                      [0, 0, 1, 0, 0]])
             # Emprical Priors
-            if 'prior' in trial_data.keys():
-                part_map = trial_data['prior'] # Participant's maximum a priori
-                temp = 130 # Must be explored further
-                empirical_priors, entropy = discrete_empirical_priors(part_map, links, temp)
+            if 'prior' in part_data.keys():
+                part_map = part_data['prior'] # Participant's maximum a priori
+                temp = 5 # Must be explored further
+                sd = 1e5
+                discrete_empirical_prior, discrete_prior_entropy = generate_discrete_empirical_priors(part_map, links, temp)
+                continuous_empirical_prior, continuous_prior_entropy = generate_gaussian_empirical_priors(part_map, sd)
             else:
-                empirical_priors = random_prior
+                discrete_empirical_prior = random_prior
+                sd = 1e5
+                continuous_empirical_prior = np.array([[0, 0, 0, 0, 0, 0],
+                                               [sd, sd, sd, sd, sd, sd]]).T
 
             ## Final prior assignment
-            prior = empirical_priors
+            prior = discrete_empirical_prior
 
             # Ground truth model
             ## Import from behavioural experiment
@@ -135,12 +146,13 @@ def main():
 
             for model in datasets.keys():
                 if model == 'normative':
+                    continue
                     N = 150
 
                     sensory_state = Omniscient_ST(N, K)
                     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 
-                    internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
+                    internal_state = Normative_DIS(N, K, discrete_empirical_prior, links, dt, theta, sigma, sample_params=False)
                     for act in datasets[model].keys():
                         if act == 'obs':
                             continue
@@ -169,12 +181,13 @@ def main():
                         datasets[model][act].loc[part_key, trial_name] = dist
 
                 elif model == 'lc':
+                    continue
                     N = 300
 
                     sensory_state = Omniscient_ST(N, K)
                     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 
-                    internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
+                    internal_state = Local_computations_omniscient_DIS(N, K, discrete_empirical_prior, links, dt, theta, sigma, sample_params=False)
                     #internal_state = Local_computations_interfocus_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
                     for act in datasets[model].keys():
                         if act == 'obs':
@@ -202,16 +215,50 @@ def main():
                         dist = normalised_euclidean_distance(true_model, internal_state.map)
 
                         datasets[model][act].loc[part_key, trial_name] = dist
+                else:
+                    N = 300
+
+                    sensory_state = Omniscient_ST(N, K)
+                    external_state = OU_Network(N, K, true_model, theta, dt, sigma)
+
+                    internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, dt, theta, sigma, sample_params=False)
+                    #internal_state = Local_computations_interfocus_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False)
+                    for act in datasets[model].keys():
+                        if act == 'obs':
+                            pass
+
+                        behaviour = act
+                        #action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon)
+                        action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)
+
+                        agent = Agent(N, sensory_state, internal_state, action_state)
+
+                        if fitting:
+                            external_state.load_trial_data(data)
+                            action_state.load_action_data(inters, inters_fit, data)
+                            internal_state.load_judgement_data(judgement_data, posterior)
+
+                        experiment = Experiment(agent, external_state)
+
+                        # Run experiment
+                        if fitting:
+                            experiment.fit(console=False)
+                        else:
+                            experiment.run(console=False)
+
+                        dist = normalised_euclidean_distance(true_model, np.round(internal_state.map*2, 0)/2)
+
+                        datasets[model][act].loc[part_key, trial_name] = dist
 
         if part_idx % 20 == 0:
             for model in datasets.keys():
                 for act in datasets[model].keys():
-                    datasets[model][act].to_csv(f'./data/{model}_{act}_prior100.csv')
+                    datasets[model][act].to_csv(f'./data/{model}_{act}_round.csv')
         part_idx += 1
     
     for model in datasets.keys():
         for act in datasets[model].keys():
-            datasets[model][act].to_csv(f'./data/{model}_{act}_prior100.csv')
+            datasets[model][act].to_csv(f'./data/{model}_{act}_round.csv')
 
 if __name__ == '__main__':
     main()

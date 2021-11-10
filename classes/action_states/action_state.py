@@ -44,9 +44,6 @@ class Action_state():
 
         # Action values history
         self._action_values = [None for i in range(self._N+1)]
-        self._action_seqs_values = [None for i in range(self._N+1)]
-        self._action_seqs = [None for i in range(self._N+1)]
-
         self._planned_actions = [None for i in range(self._N+1)]
 
         # Set realised to False by default
@@ -70,24 +67,16 @@ class Action_state():
                 self._current_action = self._remap_action(np.random.choice(self._num_actions))
             else:
                 # Do simulation to estimate action values if policy is not random
-                seqs_values, seqs = self._compute_action_values(external_state, sensory_state, internal_state)
+                action_values = self._compute_action_values(external_state, sensory_state, internal_state)
 
                 # Sample a sequence of actions
-                sampled_sequence_idx = self._policy(seqs_values)
+                sampled_action = self._policy(action_values)
 
-                # Sample an sequence of actions from a policy function
-                action_sequence = seqs[sampled_sequence_idx]
-
-                print('argmax:', np.argmax(self._action_values[self._n]), 'argmax seq:', seqs[np.argmax(self._action_values[self._n])], 'sampled action:', sampled_sequence_idx, 'sampled sequence:', action_sequence)
-
-                action_seq_int = [int(a) for a in action_sequence.split(',')]
-                self._planned_actions[self._n] = action_seq_int
-                self._current_action = self._remap_action(action_seq_int[0])  
+                # Remap to the action (idx) to tuple (variable, value)
+                self._current_action = self._remap_action(sampled_action)  
 
                 # Update hitory
-                self._action_values[self._n] = self._average_over_sequences(seqs_values, seqs)
-                self._action_seqs_values[self._n] = seqs_values
-                self._action_seqs[self._n] = seqs           
+                self._action_values[self._n] = action_values        
 
             # Reset action idx
             self._action_idx = 0
@@ -133,10 +122,7 @@ class Action_state():
             return action_log_prob
         else:
             # Else do simulation to estimate action values if policy is not random
-            seqs_values, seqs = self._compute_action_values(external_state, sensory_state, internal_state)
-                
-            # Average over values
-            action_values = self._average_over_sequences(seqs_values, seqs)
+            action_values = self._compute_action_values(external_state, sensory_state, internal_state)            
 
             # Compute policy params
             action_prob = self._pmf_policy(flat_action, action_values)
@@ -146,8 +132,6 @@ class Action_state():
 
             # Update hitory
             self._action_values[self._n] = action_values
-            self._action_seqs_values[self._n] = seqs_values
-            self._action_seqs[self._n] = seqs  
                
             self._action_idx = 0
             self._current_action = flat_action
@@ -255,15 +239,6 @@ class Action_state():
             return (action[0], self._poss_actions[set_value_idx])
 
 
-    def _average_over_sequences(self, seqs_values, seqs):
-        first_action_in_seq = np.array([int(seq.split(',')[0]) for seq in seqs])
-        action_values = np.zeros(self._num_actions)
-        for i in range(self._num_actions):
-            action_values[i] = seqs_values[first_action_in_seq == i].sum()
-
-        return action_values
-
-
 
 # Tree search action selection
 class Treesearch_AS(Action_state):
@@ -272,6 +247,9 @@ class Treesearch_AS(Action_state):
 
         self._tree_search_func = tree_search_func
         self._tree_search_func_args = tree_search_func_args
+
+        self._action_seqs_values = [None for i in range(self._N+1)]
+        self._action_seqs = [None for i in range(self._N+1)]
         
         self._knowledge = knowledge
         self._C = C        
@@ -281,7 +259,6 @@ class Treesearch_AS(Action_state):
 
         # Logic for tree search based action values
         true_graph = external_state.causal_matrix
-
 
         for c in range(self._C):
 
@@ -305,25 +282,32 @@ class Treesearch_AS(Action_state):
             print('Compute action values, C=', c, 'Model n:', internal_state._n, 'Sampled graph:', sample_print)
 
             # Build outcome tree
-            action_values_astree = self._tree_search_func(0, external_state, 
+            seqs_values_astree = self._tree_search_func(0, external_state, 
                                                              sensory_state,
                                                              internal_state,
                                                              self._run_local_experiment,
                                                              *self._tree_search_func_args)
 
             # Extract action values
-            leaves = jax.tree_leaves(action_values_astree)
+            leaves = jax.tree_leaves(seqs_values_astree)
             leaves_table = np.array(leaves).reshape((int(len(leaves)/2), 2))
-            action_values_c, seqs = leaves_table[:, 0].astype(float), leaves_table[:, 1]
+            seqs_values_c, seqs = leaves_table[:, 0].astype(float), leaves_table[:, 1]
 
             # Update action_value for time n
             if c == 0:
-                action_values = action_values_c
+                seqs_values = seqs_values_c
                 action_seqs = seqs
             else:
-                action_values += 1/(c+1) * (action_values_c - action_values)
+                seqs_values += 1/(c+1) * (seqs_values_c - seqs_values)
 
-        return action_values, action_seqs
+
+        self._action_seqs_values[self._n] = seqs_values
+        self._action_seqs[self._n] = action_seqs  
+
+        # Average over values
+        action_values = self._average_over_sequences(seqs_values, seqs)
+
+        return action_values
 
 
     # Background methods
@@ -345,5 +329,24 @@ class Treesearch_AS(Action_state):
             internal_state.update(sensory_state, action)
 
         return init_entropy - internal_state.posterior_entropy
+
+    
+    def _average_over_sequences(self, seqs_values, seqs):
+        first_action_in_seq = np.array([int(seq.split(',')[0]) for seq in seqs])
+        action_values = np.zeros(self._num_actions)
+        for i in range(self._num_actions):
+            action_values[i] = seqs_values[first_action_in_seq == i].sum()
+
+        return action_values
+
+
+# Experience based action selection
+## Action values are considered state independent
+class Experience_AS(Action_state):
+    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon):
+        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, self._experience_action_values)
+
+    def _experience_action_values(self, external_state, sensory_state, internal_state):
+        pass
 
 

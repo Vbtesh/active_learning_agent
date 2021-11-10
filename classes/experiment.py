@@ -42,7 +42,7 @@ class Experiment():
             self.agent.fit_learn(self.external_state, intervention=a)
 
             if n % 10 == 0 and console:
-                print('Iter:', n, 'Current MAP:', self.agent.internal_state.map, 'Current LL:', self.agent.log_likelihood)
+                print('Iter:', n, 'Current MAP:', self.agent.internal_state.map, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.internal_state.posterior_entropy)
 
             self._n += 1
 
@@ -72,7 +72,7 @@ class Experiment():
 
                 if n % 10 == 0 and console:
                     print('Iter:', n)
-                    print('Current MAP:', self.agent.internal_state.map)
+                    print('Current MAP:', self.agent.internal_state.map, 'Entropy:', self.agent.internal_state.posterior_entropy)
                     #print('Current posterior:')
                     #print(np.around(agent.model.posterior_links, 2))
 
