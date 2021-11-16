@@ -34,7 +34,7 @@ def main():
     
 
     # Model fitting
-    fitting = True # If false, no data will be used 
+    fitting = False # If false, no data will be used 
 
     ## Data from trial
     part_data = modelling_data[part_key]['trials'][cond]
@@ -57,8 +57,8 @@ def main():
     dt = 0.2
     sigma = 3
 
+    # Smoothing parameter for discrete posterior distributions
     smoothing = 1e-20
-    #smoothing = False
 
     # Set up priors
     flat_prior = np.array([0.2, 0.2, 0.2, 0.2, 0.2])
@@ -118,11 +118,15 @@ def main():
     horizon = 1e-2 # For soft horizon discounted gain
     discount = 0.01 # For soft horizon discounted gain
     depth = 1 # Horizon for hard horizon undiscounted gain
+
+    # Gamma for change in sensory state
+    gamma = 0.7
+
     ## General behaviour parameter
     behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
     
 
-    sensory_state = Omniscient_ST(N, K)
+    sensory_state = Omniscient_ST(N, K, gamma)
     
     action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, discount, horizon)
     action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, poss_actions, action_len, policy_funcs, epsilon, C, knowledge, depth)

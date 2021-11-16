@@ -8,9 +8,9 @@ class Action_state():
                           behaviour,
                           possible_actions,
                           action_len, 
-                          policy_funcs,
                           epsilon, 
-                          action_value_func):
+                          sample_action_func,
+                          fit_action_func):
 
         self._N = N
         self._n = 0
@@ -29,23 +29,20 @@ class Action_state():
 
         # Certainty parameter, stops intervening when posterior entropy is below the threshold
         self._epsilon = epsilon
- 
-        # A function that takes action values as arguments and return an sequence of actions which is then remapped onto action_seqs and then split using the remap_action function
-        # Argument must be action values over all possible actions
-        self._policy = policy_funcs[0]
-        # Return the probability of taking an action given the current action values
-        self._pmf_policy = policy_funcs[1]
-        # Return the parameters of the policy given the the current action values
-        self._params_policy = policy_funcs[2]
 
         # Action value function
         # Arguments must be: action_state or self, external_state, sensory_state, internal_state
-        self._compute_action_values = action_value_func
+        # Returns a tuple representing an action or None for idleness
+        self._sample_action = sample_action_func
+        # Argument are action as tuple or None, external_state, sensory_state, internal_state
+        # Returns a log probability of taking the action
+        self._fit_action = fit_action_func
 
-        # Action values history
-        self._action_values = [None for i in range(self._N+1)]
-        self._planned_actions = [None for i in range(self._N+1)]
-
+        # Action history
+        self._actions_history = [None for i in range(self._N+1)]
+        self._variable_history = np.zeros(self._N+1)
+        self._variable_history[:] = np.nan
+ 
         # Set realised to False by default
         self._realised = False
 
@@ -66,17 +63,14 @@ class Action_state():
             if self._behaviour == 'random':
                 self._current_action = self._remap_action(np.random.choice(self._num_actions))
             else:
-                # Do simulation to estimate action values if policy is not random
-                action_values = self._compute_action_values(external_state, sensory_state, internal_state)
+                # Sample action using the sample action func
+                sampled_action = self._sample_action(external_state, sensory_state, internal_state)
+                self._current_action = sampled_action
 
-                # Sample a sequence of actions
-                sampled_action = self._policy(action_values)
-
-                # Remap to the action (idx) to tuple (variable, value)
-                self._current_action = self._remap_action(sampled_action)  
-
-                # Update hitory
-                self._action_values[self._n] = action_values        
+            # Update history  
+            self._actions_history[self._n] = self._current_action 
+            if type(self._current_action) == tuple:
+                self._variable_history[self._n] = self._current_action[0]
 
             # Reset action idx
             self._action_idx = 0
@@ -88,10 +82,17 @@ class Action_state():
     # Fit action to action states
     ## Needs action data to be loaded to function
     def fit(self, external_state, sensory_state, internal_state): 
+        # Constraint actual action
+        constrained_action = self._constrain_action(self.a_fit)
+        self._current_action = constrained_action
         
         if self._behaviour == 'obs':
+            # Record action if action was taken
+            self._actions_history[self._n] = self._current_action 
+            if type(self._current_action) == tuple:
+                self._variable_history[self._n] = self._current_action[0]
+            
             # Do not fit actions
-    
             self._n += 1
             self._log_likelihood -= 0
             self._log_likelihood_history[self._n] = self._log_likelihood
@@ -103,47 +104,34 @@ class Action_state():
             self._log_likelihood += 0
             self._log_likelihood_history[self._n] = self._log_likelihood
             return 0
-        
-        # Constraint actual action
-        constrained_action = self._constrain_action(self.a)
-        flat_action = self._flatten_action(constrained_action)
 
         if self._behaviour == 'random':
             # If behaviour is random, simply return the probability of taking any action
-            self._action_idx = 0
-            self._current_action = flat_action
-            self._planned_actions[self._n] = flat_action
-            self._n += 1
-
             action_log_prob = np.log(1 / self._num_actions)
 
             self._log_likelihood += action_log_prob
+
+            # Update history
+            self._actions_history[self._n] = self._current_action 
+            if type(self._current_action) == tuple:
+                self._variable_history[self._n] = self._current_action[0]
             self._log_likelihood_history[self._n] = self._log_likelihood
+
+            self._n += 1
             return action_log_prob
         else:
-            # Else do simulation to estimate action values if policy is not random
-            action_values = self._compute_action_values(external_state, sensory_state, internal_state)            
-
-            # Compute policy params
-            action_prob = self._pmf_policy(flat_action, action_values)
-
-            # Log of probability of action
-            action_log_prob = np.log(action_prob)
-
-            # Update hitory
-            self._action_values[self._n] = action_values
-               
-            self._action_idx = 0
-            self._current_action = flat_action
-            self._planned_actions[self._n] = flat_action
-            
-            # Record history
-            self._log_likelihood_history[self._n] = self._log_likelihood
+            # Compute and return Log probability of action
+            action_log_prob = self._fit_action(self._current_action, external_state, sensory_state, internal_state)
             # Update log likelihood
             self._log_likelihood += action_log_prob
 
-            self._n += 1
+            # Update hitory
+            self._actions_history[self._n] = self._current_action 
+            if type(self._current_action) == tuple:
+                self._variable_history[self._n] = self._current_action[0]
+            self._log_likelihood_history[self._n] = self._log_likelihood
 
+            self._n += 1
             return action_log_prob
 
 
@@ -205,31 +193,12 @@ class Action_state():
     def actions_fit(self):
         return self._A_fit[0:self._n+1]
 
-    
-    # Return None, for idleness or a tuple (variable index, variable value) otherwise
-    def _remap_action(self, action):
-        if action // self._poss_actions.size > self._K - 1:
-            return None
-        else:
-            variable_idx = action // self._poss_actions.size
-            variable_value = self._poss_actions[action % self._poss_actions.size]
-
-            return (variable_idx, variable_value)
-
-    def _flatten_action(self, action):
-        if not action:
-            return self._num_actions - 1
-        else:    
-            value_idx = np.argmax(np.where(self._poss_actions == action[1])[0])
-            return self._action_grid[action[0], value_idx]
-
     # Evaluate action similarity
     def _action_check(self, action_1, action_2):
         if self._constrain_action(action_2) == self._constrain_action(action_1):
             return True
         else:
             False
-
 
     def _constrain_action(self, action):
         if not action:
@@ -243,16 +212,58 @@ class Action_state():
 # Tree search action selection
 class Treesearch_AS(Action_state):
     def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, tree_search_func, tree_search_func_args=[]):
-        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, self._tree_search_action_values)
+        super().__init__(N, K, behaviour, possible_actions, action_len, epsilon, self._tree_search_action_sample, self._tree_search_action_fit)
 
         self._tree_search_func = tree_search_func
         self._tree_search_func_args = tree_search_func_args
 
+        # A function that takes action values as arguments and return an sequence of actions which is then remapped onto action_seqs and then split using the remap_action function
+        # Argument must be action values over all possible actions
+        self._policy = policy_funcs[0]
+        # Return the probability of taking an action given the current action values
+        self._pmf_policy = policy_funcs[1]
+        # Return the parameters of the policy given the the current action values
+        self._params_policy = policy_funcs[2]
+
+        self._action_values = [None for i in range(self._N+1)]
         self._action_seqs_values = [None for i in range(self._N+1)]
         self._action_seqs = [None for i in range(self._N+1)]
         
         self._knowledge = knowledge
-        self._C = C        
+        self._C = C    
+
+
+    def _tree_search_action_sample(self, external_state, sensory_state, internal_state):   
+        action_values = self._tree_search_action_values(external_state, sensory_state, internal_state) 
+
+        # Sample a sequence of actions
+        sampled_action = self._policy(action_values)
+
+        # Update history
+        self._action_values[self._n] = action_values  
+
+        # Return action remapped to the action (idx) to tuple (variable, value)
+        return self._remap_action(sampled_action)
+
+
+    def _tree_search_action_fit(self, action, external_state, sensory_state, internal_state):   
+        # Flatten action
+        flat_action = self._flatten_action(action)
+
+        # Compute action values
+        action_values = self._tree_search_action_values(external_state, sensory_state, internal_state) 
+
+        # Compute policy params
+        action_prob = self._pmf_policy(flat_action, action_values)
+
+        # Log of probability of action
+        action_log_prob = np.log(action_prob)
+
+        # Update history
+        self._action_values[self._n] = action_values  
+
+        # Return action remapped to the action (idx) to tuple (variable, value)
+        return action_log_prob
         
 
     def _tree_search_action_values(self, external_state, sensory_state, internal_state):
@@ -310,7 +321,25 @@ class Treesearch_AS(Action_state):
         return action_values
 
 
+
     # Background methods
+    # Return None, for idleness or a tuple (variable index, variable value) otherwise
+    def _remap_action(self, action):
+        if action // self._poss_actions.size > self._K - 1:
+            return None
+        else:
+            variable_idx = action // self._poss_actions.size
+            variable_value = self._poss_actions[action % self._poss_actions.size]
+
+            return (variable_idx, variable_value)
+
+    def _flatten_action(self, action):
+        if not action:
+            return self._num_actions - 1
+        else:    
+            value_idx = np.argmax(np.where(self._poss_actions == action[1])[0])
+            return self._action_grid[action[0], value_idx]
+    
     # Update rule for the leaves values
     # Simulates an agent's update
     def _run_local_experiment(self, action_idx, external_state, sensory_state, internal_state):
@@ -344,7 +373,14 @@ class Treesearch_AS(Action_state):
 ## Action values are considered state independent
 class Experience_AS(Action_state):
     def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon):
-        super().__init__(N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, self._experience_action_values)
+        super().__init__(N, K, behaviour, possible_actions, action_len, epsilon, self._experience_action_sample, self._experience_action_fit)
+
+    def _experience_action_sample(self, external_state, sensory_state, internal_state):
+        pass
+
+    def _experience_action_fit(self, action, external_state, sensory_state, internal_state):
+        pass
+
 
     def _experience_action_values(self, external_state, sensory_state, internal_state):
         pass

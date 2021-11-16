@@ -1,3 +1,4 @@
+from os import name
 import numpy as np
 import matplotlib.pyplot as plt 
 import seaborn as sns
@@ -5,10 +6,13 @@ from copy import deepcopy
 
 
 class Agent():
-    def __init__(self, N, sensory_state, internal_state, action_state):
+    def __init__(self, N, sensory_state, internal_state, action_state, range_values=(-100, 100)):
         # Set parameters
         self._N = N
         self._n = 0
+
+        # SHOULD BE CHANGED, AGENT SHOULD BE OU AGENT
+        self._range = range_values
 
         # Set blanket states
         ## Sensory state: must be a Sensory_state object
@@ -108,6 +112,52 @@ class Agent():
 
 
     # Reports
+    def plot_perceptions(self):
+        palette = sns.color_palette() # Set palette
+        sns.set_palette(palette)
+        
+        data_obs = self.sensory_state.obs
+
+        ax = sns.lineplot(data=data_obs[0:self._n+1,:], lw=1.5) # Plot data
+
+        for i in range(self.sensory_state._K):
+            # Plot interventions where relevant
+            ints = self.action_state._variable_history[0:self._n+1] == i
+            if np.sum(ints) == 0:
+                continue
+            
+            x = np.arange(len(ints))
+            y1 = self._range[0] * ints
+            y2 = self._range[1] * ints
+            ax.fill_between(x, y1, y2, color=palette[i], alpha=0.15)
+
+        plt.title('Network Perception')
+        plt.ylim(self._range[0], self._range[1])
+
+    # Reports
+    def plot_alt_perceptions(self):
+        palette = sns.color_palette() # Set palette
+        sns.set_palette(palette)
+        
+        alt_labels = ['0 - alt', '1 - alt', '2 - alt']
+        data_obs_alt = self.sensory_state.obs_alt
+        ax = sns.lineplot(data=data_obs_alt[0:self._n+1,:], lw=1) # Plot data
+        #ax = sns.lineplot(data=data_obs_alt[0:self._n+1,:], lw=0.5) # Plot data
+
+        for i in range(self.sensory_state._K):
+            # Plot interventions where relevant
+            ints = self.action_state._variable_history[0:self._n+1] == i
+            if np.sum(ints) == 0:
+                continue
+            
+            x = np.arange(len(ints))
+            y1 = self._range[0] * ints
+            y2 = self._range[1] * ints
+            ax.fill_between(x, y1, y2, color=palette[i], alpha=0.15)
+
+        plt.title('Network Alternative Perception')
+        plt.ylim(self._range[0] / 2, self._range[1]/ 2)
+
     def plot_entropy_history(self, colour='blue'):
         entropy = self.internal_state.entropy_history
         ax = sns.lineplot(data=entropy[0:self._n+1], lw=1.5, palette=[colour]) # Plot data

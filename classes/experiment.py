@@ -100,10 +100,16 @@ class Experiment():
             plt.subplot(2, 2, 2)
             self.agent.plot_entropy_history()
             plt.subplot(2, 2, 3)
-            self.agent.plot_posterior()
+            self.agent.plot_perceptions()
+            if self.agent.sensory_state._obs_alt_record:
+                plt.subplot(2, 2, 4)
+                self.agent.plot_alt_perceptions()
 
             print('True model:', self.external_state.causal_vector)
             print('Final MAP:', self.agent.internal_state.map)
+            if self.external_state._realised:
+                print('Posterior judgement:', self.agent.internal_state._judgement_final)
+
         else:
             for i in range(self._iter):
                 sns.lineplot(self._entropy_hist[i,:], palette=palette)

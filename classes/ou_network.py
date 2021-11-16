@@ -100,6 +100,7 @@ class OU_Network():
         self._X[self._n+1, :][self._X[self._n+1, :] < self._range[0]] = self._range[0]
         self._X[self._n+1, :][self._X[self._n+1, :] > self._range[1]] = self._range[1]
 
+        # Record Difference
         # Increment index      
         self._n += 1
 
