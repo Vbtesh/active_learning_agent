@@ -2,12 +2,12 @@ from classes.internal_states.internal_state import Continuous_IS
 from scipy import stats
 import numpy as np
 
-from methods.smoothing import entropy
+from methods.smoothing import entropy, smooth
 
 # Local computation discrete agent
 class Local_computations_omniscient_CIS(Continuous_IS):
-    def __init__(self, N, K, prior_params, dt, theta, sigma, sample_params=True, init_obs=None):
-        super().__init__(N, K, prior_params, dt, theta, sigma, self._update_rule, sample_params=sample_params)
+    def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=0, init_obs=None):
+        super().__init__(N, K, prior_params, links, dt, theta, sigma, self._update_rule, sample_params=sample_params, smoothing=smoothing)
 
         self._prior_params = prior_params
         self._init_priors()
@@ -73,23 +73,28 @@ class Local_computations_omniscient_CIS(Continuous_IS):
         return np.sum(stats.norm.entropy(scale=parameters[:, 1]))
 
 
-    def _pdf(self, obs, log=False):
-        bias = 0
-        means = self._posterior_params[:, 0]
-        sds = self._posterior_params[:, 1]
-        if log:
-            return stats.norm.logpdf(obs, loc=means, scale=bias+sds)
-        else:
-            return stats.norm.pdf(obs, loc=means, scale=bias+sds)
+    def _pdf(self, obs):
+        means = self._posterior_params[:, 0].reshape((self._posterior_params.shape[0], 1))
+        sds = self._posterior_params[:, 1].reshape((self._posterior_params.shape[0], 1))
+
+        discretised_PMF = stats.norm.cdf(self._L + self._interval, loc=means, scale=sds) - stats.norm.cdf(self._L - self._interval, loc=means, scale=sds)
+        discretised_norm_PMF = discretised_PMF / discretised_PMF.sum(axis=1).reshape(means.shape)
+        smoothed_PMF = self._smooth(discretised_norm_PMF)
+        logic = np.tile(self._L, (means.size, 1)) == obs.reshape(means.shape)
+
+        return smoothed_PMF[logic]
 
     
-    def _link_pdf(self, link_idx, link_value, log=False):
-        bias = 0
-        mean = self._posterior_params[link_idx, 0]
-        sd = self._posterior_params[link_idx, 1]
-        if log:
-            return stats.norm.logpdf(link_value, loc=mean, scale=bias+sd)
-        else:
-            return stats.norm.pdf(link_value, loc=mean, scale=bias+sd)
+    def _link_pdf(self, link_idx, link_value):
+        means = self._posterior_params[:, 0].reshape((self._posterior_params.shape[0], 1))
+        sds = self._posterior_params[:, 1].reshape((self._posterior_params.shape[0], 1))
+
+        discretised_PMF = stats.norm.cdf(self._L + self._interval, loc=means, scale=sds) - stats.norm.cdf(self._L - self._interval, loc=means, scale=sds)
+        discretised_norm_PMF = discretised_PMF / discretised_PMF.sum(axis=1).reshape(means.shape)
+        smoothed_PMF = self._smooth(discretised_norm_PMF)
+        link_smoothed_PMF = smoothed_PMF[link_idx, :]
+        logic = np.squeeze(self._L == link_value)
+        
+        return link_smoothed_PMF[logic][0]
 
     

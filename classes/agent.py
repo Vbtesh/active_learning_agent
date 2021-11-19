@@ -1,3 +1,4 @@
+from math import log
 from os import name
 import numpy as np
 import matplotlib.pyplot as plt 

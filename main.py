@@ -28,13 +28,12 @@ def main():
         modelling_data = pickle.load(inFile)
 
 
-    part_key = '5ef109c89196fa6d5cf6c005'
+    part_key = '60a2541c0e5a829853aad745'
     conditions = ['generic', 'congruent', 'incongruent', 'implausible']
-    cond = conditions[0]
+    cond = conditions[3]
     
-
     # Model fitting
-    fitting = False # If false, no data will be used 
+    fitting = True # If false, no data will be used 
 
     ## Data from trial
     part_data = modelling_data[part_key]['trials'][cond]
@@ -133,7 +132,7 @@ def main():
     
     internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
     internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
-    internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, dt, theta, sigma)
+    internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
 
     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 

@@ -343,20 +343,32 @@ class Discrete_IS(Internal_state):
 
 # Internal state using a continuous probability distribution to represent the external states
 class Continuous_IS(Internal_state):
-    def __init__(self, N, K, prior_params, dt, theta, sigma, update_func, update_func_args=[], sample_params=True):
+    def __init__(self, N, K, prior_params, links, dt, theta, sigma, update_func, update_func_args=[], sample_params=True, smoothing=0):
         super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
 
         self._dt = dt
+        self._smoothing_temp = smoothing
         
         # Sample parameter estimates
         if sample_params:
             # Sample key variables according to Davis, Rehder, Bramley (2018)
             self._theta = stats.gamma.rvs(100*theta, scale=1/100, size=1)
             self._sigma = stats.gamma.rvs(100*sigma, scale=1/100, size=1)
+
+            self._L = np.zeros(len(links))
+            for i, l in enumerate(links):
+                if l < 0:
+                    self._L[i] = -1 * stats.gamma.rvs(100*np.abs(l), scale=1/100)
+                elif l == 0:
+                    self._L[i] = 0
+                else:
+                    self._L[i] = stats.gamma.rvs(100*l, scale=1/100)
         else:
             # Assume perfect knowledge
             self._theta = theta
             self._sigma = sigma
+            self._L = links
+            self._interval = np.abs(self._L[0] - self._L[1])
 
     
     # Properties
@@ -370,13 +382,13 @@ class Continuous_IS(Internal_state):
 
     @property
     def posterior_entropy(self):
-        return self._entropy(self.posterior)
+        return self._diff_entropy(self.posterior)
     
     @property
     def entropy_history(self):
         entropy_history = np.zeros(len(self._posterior_params_history))
         for i in range(entropy_history.size):
-            entropy_history[i] = self._entropy(self._posterior_params_history[i])
+            entropy_history[i] = self._diff_entropy(self._posterior_params_history[i])
         return entropy_history
 
 
@@ -400,19 +412,54 @@ class Continuous_IS(Internal_state):
     # PMF of the posterior for a given graph
     def posterior_PF(self, graph, log=False):
         if log:
-            return np.sum(self._pdf(graph, log=log))
+            log_posterior = np.log(self._pdf(graph))
+            return np.sum(log_posterior)
         else:
-            return np.prod(self._pdf(graph, log=log))
+            return np.prod(self._pdf(graph))
 
 
     # PMF of the posterior for a given link
     def posterior_PF_link(self, link_idx, link_value, log=False):
-        return self._link_pdf(link_idx, link_value, log=log)
+        if log:
+            return np.log(self._link_pdf(link_idx, link_value))
+        else:
+            return self._link_pdf(link_idx, link_value)
         
 
-    def _entropy(self, parameters):
+    def _diff_entropy(self, parameters):
         # Needs to be specifically defined per sub class
         return self._entropy_distribution(parameters)
+
+    
+    def _entropy(self, distribution):
+        log_dist = np.log2(distribution, where=distribution!=0)
+        log_dist[log_dist == -np.inf] = 0
+
+        if len(distribution.shape) == 1 or distribution.shape == (self._K**2 - self._K, self._L.size):
+            return - np.sum(distribution * log_dist)
+        elif len(distribution.shape) == 3:
+            return - np.squeeze(np.sum(distribution * log_dist, axis=2).sum(axis=1))
+        else:
+            return - np.sum(distribution * log_dist, axis=1)
+
+    
+    def _smooth(self, dist):
+        if self._smoothing_temp == 0:
+            return dist
+        
+        if len(dist.shape) == 1:
+            dist = dist.reshape((1, dist.size))
+
+        indices = np.tile(np.arange(dist.shape[1]), (dist.shape[0], 1))
+        max_dist = np.argmax(dist, axis=1).reshape((dist.shape[0], 1))
+
+        smoother = ( dist.shape[1] - np.abs(indices - max_dist) ) / dist.shape[1]
+
+        certainty_coef = np.exp(- self._entropy(dist)) * self._smoothing_temp
+
+        smoothed_values = dist + certainty_coef * smoother
+
+        return smoothed_values / smoothed_values.sum(axis=1).reshape((dist.shape[0], 1))
         
 
 

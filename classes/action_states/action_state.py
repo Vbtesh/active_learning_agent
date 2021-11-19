@@ -6,8 +6,6 @@ from numpy.random.mtrand import uniform
 class Action_state():
     def __init__(self, N, K, 
                           behaviour,
-                          possible_actions,
-                          action_len, 
                           epsilon, 
                           sample_action_func,
                           fit_action_func):
@@ -17,15 +15,12 @@ class Action_state():
         self._K = K
         self._behaviour = behaviour
 
-        # Num of possible action is all possible values for all variable plus 1 for staying idle
-        self._num_actions = self._K * len(possible_actions) + 1
-
-        self._action_grid = np.arange(self._K * len(possible_actions)).reshape(self._K, len(possible_actions))
-
-        self._poss_actions = possible_actions
-        self._action_len = action_len
+        # Sets up the length and associated attribute 
+        self._action_len = None
         self._action_idx = 0
-        self._current_action = self._num_actions # Represents the index of doing nothing, i.e. None, in list form 
+
+        # Default current action
+        self._current_action = None
 
         # Certainty parameter, stops intervening when posterior entropy is below the threshold
         self._epsilon = epsilon
@@ -39,6 +34,7 @@ class Action_state():
         self._fit_action = fit_action_func
 
         # Action history
+        self._action_len_history = [None for i in range(self._N+1)]
         self._actions_history = [None for i in range(self._N+1)]
         self._variable_history = np.zeros(self._N+1)
         self._variable_history[:] = np.nan
@@ -64,10 +60,12 @@ class Action_state():
                 self._current_action = self._remap_action(np.random.choice(self._num_actions))
             else:
                 # Sample action using the sample action func
-                sampled_action = self._sample_action(external_state, sensory_state, internal_state)
+                sampled_action, length = self._sample_action(external_state, sensory_state, internal_state)
                 self._current_action = sampled_action
+                self._action_len = length
 
             # Update history  
+            self._action_len_history[self._n] = self._action_len
             self._actions_history[self._n] = self._current_action 
             if type(self._current_action) == tuple:
                 self._variable_history[self._n] = self._current_action[0]
@@ -212,10 +210,22 @@ class Action_state():
 # Tree search action selection
 class Treesearch_AS(Action_state):
     def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, tree_search_func, tree_search_func_args=[]):
-        super().__init__(N, K, behaviour, possible_actions, action_len, epsilon, self._tree_search_action_sample, self._tree_search_action_fit)
+        super().__init__(N, K, behaviour, epsilon, self._tree_search_action_sample, self._tree_search_action_fit)
+
+        # Num of possible action is all possible values for all variable plus 1 for staying idle
+        self._num_actions = self._K * len(possible_actions) + 1
+
+        self._action_grid = np.arange(self._K * len(possible_actions)).reshape(self._K, len(possible_actions))
+
+        self._poss_actions = possible_actions
+        self._action_idx = 0
+        self._current_action = self._num_actions # Represents the index of doing nothing, i.e. None, in list form 
 
         self._tree_search_func = tree_search_func
         self._tree_search_func_args = tree_search_func_args
+
+        # Action length 
+        self._action_len = action_len
 
         # A function that takes action values as arguments and return an sequence of actions which is then remapped onto action_seqs and then split using the remap_action function
         # Argument must be action values over all possible actions
@@ -225,6 +235,7 @@ class Treesearch_AS(Action_state):
         # Return the parameters of the policy given the the current action values
         self._params_policy = policy_funcs[2]
 
+        # Sets up specific histories
         self._action_values = [None for i in range(self._N+1)]
         self._action_seqs_values = [None for i in range(self._N+1)]
         self._action_seqs = [None for i in range(self._N+1)]
@@ -243,7 +254,7 @@ class Treesearch_AS(Action_state):
         self._action_values[self._n] = action_values  
 
         # Return action remapped to the action (idx) to tuple (variable, value)
-        return self._remap_action(sampled_action)
+        return self._remap_action(sampled_action), self._action_len
 
 
     def _tree_search_action_fit(self, action, external_state, sensory_state, internal_state):   
@@ -321,7 +332,6 @@ class Treesearch_AS(Action_state):
         return action_values
 
 
-
     # Background methods
     # Return None, for idleness or a tuple (variable index, variable value) otherwise
     def _remap_action(self, action):
@@ -372,17 +382,101 @@ class Treesearch_AS(Action_state):
 # Experience based action selection
 ## Action values are considered state independent
 class Experience_AS(Action_state):
-    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon):
+    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, experience_gained_func):
         super().__init__(N, K, behaviour, possible_actions, action_len, epsilon, self._experience_action_sample, self._experience_action_fit)
 
+        # Lingering observations time
+        self._linger = 0
+
+        # A function that takes action values as arguments and return an sequence of actions which is then remapped onto action_seqs and then split using the remap_action function
+        # Argument must be action values over all possible actions
+        self._policy = policy_funcs[0]
+        # Return the probability of taking an action given the current action values
+        self._pmf_policy = policy_funcs[1]
+        # Return the parameters of the policy given the the current action values
+        self._params_policy = policy_funcs[2]
+
+        # Specific experience gain function
+        self._experience_gained_func = experience_gained_func
+
+        # Set up action values
+        self._action_values = [None for i in range(self._N+1)]
+        self._prob_sign = np.zeros((self._N+1, 2))
+
+        # Acting state
+        self._previous_action = None
+        self._acting = None
+
     def _experience_action_sample(self, external_state, sensory_state, internal_state):
-        pass
+        # Compute action values
+        action_values = self._experience_action_values(external_state, sensory_state, internal_state) 
+
+        # Sample a sequence of actions
+        sampled_action, sampled_length = self._policy(action_values)
+
+        # Update history
+        self._action_values[self._n] = action_values  
+
+        # Return action remapped to the action (idx) to tuple (variable, value)
+        return sampled_action, sampled_length
+
+
+    # Logic is complex as the likelihood of performing an action has to be computed for the index - action length
+    # action values update are always with respect to the last action taken, i.e. will always be based on, discounted by the number of step 
+    # If no action taken yet, return 0
+    # If action taken, but not acting, compute action values, return 0
+    # If new action, acting or non acting, return p(new action)
+    # If acting, no action, stop acting, compute action values, return 0
 
     def _experience_action_fit(self, action, external_state, sensory_state, internal_state):
-        pass
+        if not self._previous_action and not self._current_action:
+            # Agent is idle and has not taken any action
+            return 0
+        elif self._previous_action and not self._current_action:
+            # No acting done here
+            self._acting = False
+            # Observation after action, update action values for previous action
+            self._action_values[self._n] = self._experience_action_values(self._previous_action, external_state, sensory_state, internal_state)
+            # Increment observed length
+            self._obs_len += 1
+            return 0
+        elif not self._previous_action and self._current_action:
+            # First action is being taken, do nothing until action is completed
+            self._acting = True
+            # Set action length to 1
+            self._previous_action = self._current_action
+            self._action_len = 1
+            return 0
+        else:
+            # Case where previous and current action are true
+            if self._action_check(self._previous_action, self._current_action):
+                # If both are the same, just increment action length
+                self._action_len += 1
+                return 0
+            else:
+                # Two cases, immediate change or change after obs
+                # Changing action, compute action values
+                self._action_values[self._n] = self._experience_action_values(self._previous_action, external_state, sensory_state, internal_state)
+                # Fit previous action 
+                ##### FIT IE PMF POLICY
+                action_log_prob = self._pmf_policy(self._previous_action, self._action_len, self._obs_len, self._action_values)
+
+                # Previous action becomes current action, reset counters of length
+                self._previous_action = self._current_action
+                self._action_len = 1
+                self._obs_len = 0
+
+                return action_log_prob
+        
 
 
-    def _experience_action_values(self, external_state, sensory_state, internal_state):
-        pass
+    def _experience_action_values(self, action, rollback, external_state, sensory_state, internal_state):
+        # Compute experience gained from action and rollback
+        # Can be in information gained or change produced
+        experience_gained, learning_rates = self._experience_gained_func(action, rollback, external_state, sensory_state, internal_state)
+
+        action_values = self._action_values[self._n - rollback] + learning_rates * (experience_gained - self._action_values[self._n - rollback])
+
+        return action_values
 
 
