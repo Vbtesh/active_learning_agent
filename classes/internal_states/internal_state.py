@@ -213,7 +213,11 @@ class Discrete_IS(Internal_state):
 
     @property
     def posterior_entropy(self):
-        return self._entropy(self.posterior)
+        return self._entropy(self.posterior_over_models)
+
+    @property
+    def posterior_entropy_over_links(self):
+        return self._entropy(self.posterior_over_links)
     
     @property
     def entropy_history(self):
@@ -291,7 +295,7 @@ class Discrete_IS(Internal_state):
         log_dist = np.log2(distribution, where=distribution!=0)
         log_dist[log_dist == -np.inf] = 0
 
-        if len(distribution.shape) == 1 or distribution.shape == (self._K**2 - self._K, self._L.size):
+        if len(distribution.shape) == 1:
             return - np.sum(distribution * log_dist)
         elif len(distribution.shape) == 3:
             return - np.squeeze(np.sum(distribution * log_dist, axis=2).sum(axis=1))

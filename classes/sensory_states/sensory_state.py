@@ -45,7 +45,7 @@ class Sensory_state():
 
     @property
     def obs(self):
-        return self._observations
+        return self._observations[:self._n, :]
 
     @property
     def s_alt(self):
@@ -66,6 +66,5 @@ class Sensory_state():
         if not self._obs_alt_record:
             return None
         else:
-            return self._observations_alt
-
+            return self._observations_alt[:self._n, :]
 

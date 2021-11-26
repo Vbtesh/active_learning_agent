@@ -382,9 +382,11 @@ class Treesearch_AS(Action_state):
 # Experience based action selection
 ## Action values are considered state independent
 class Experience_AS(Action_state):
-    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, experience_gained_func):
-        super().__init__(N, K, behaviour, possible_actions, action_len, epsilon, self._experience_action_sample, self._experience_action_fit)
+    def __init__(self, N, K, behaviour, possible_actions, policy_funcs, epsilon, experience_gained_func):
+        super().__init__(N, K, behaviour, epsilon, self._experience_action_sample, self._experience_action_fit)
 
+        self._poss_actions = possible_actions
+        self._action_grid = np.arange(self._K * len(possible_actions)).reshape(self._K, len(possible_actions))
         # Lingering observations time
         self._linger = 0
 
@@ -401,11 +403,14 @@ class Experience_AS(Action_state):
 
         # Set up action values
         self._action_values = [None for i in range(self._N+1)]
+        self._prob_variable = np.zeros((self._N+1, self._K))
         self._prob_sign = np.zeros((self._N+1, 2))
 
         # Acting state
+        self._current_action = None
         self._previous_action = None
         self._acting = None
+
 
     def _experience_action_sample(self, external_state, sensory_state, internal_state):
         # Compute action values
@@ -456,9 +461,13 @@ class Experience_AS(Action_state):
             else:
                 # Two cases, immediate change or change after obs
                 # Changing action, compute action values
-                self._action_values[self._n] = self._experience_action_values(self._previous_action, external_state, sensory_state, internal_state)
+                self._action_values[self._n] = self._experience_gain_func(self._previous_action, self._action_len, self._obs_len, external_state, sensory_state, internal_state)
+
+                # Fit variable intervened upon, function of link entropy, higher entropy => higher prob
+                self._prob_variable[self._n, :] = self._compute_variable_prob(internal_state)
+                # Fit sign of intervention value
+                self._prob_sign[self._n, :] = self._compute_sign_change_prob(self._previous_action, self._action_len, self._obs_len, sensory_state)
                 # Fit previous action 
-                ##### FIT IE PMF POLICY
                 action_log_prob = self._pmf_policy(self._previous_action, self._action_len, self._obs_len, self._action_values)
 
                 # Previous action becomes current action, reset counters of length
@@ -467,16 +476,34 @@ class Experience_AS(Action_state):
                 self._obs_len = 0
 
                 return action_log_prob
+
+
+    def _compute_variable_prob(self, internal_state):
+        entropy_over_links = internal_state.posterior_entropy_over_links
+        p_links = np.exp(entropy_over_links) / np.sum(np.exp(entropy_over_links))
+        p_var = internal_state._causality_matrix(p_links, fill_diag=0).sum(axis=1)
+
+        return p_var
+
+
+    def _compute_sign_change_prob(self, action, sensory_state):
+        if not self._acting:
+            return np.ones(self._K) / self._K
+
+        effect_variables = np.arange(self._K) != action[0]
+        changes = np.abs(sensory_state.s_alt[effect_variables])
+
+        # Parameters that describes the attention given to the effect variables, default is uniform
+        attention_params = np.ones(changes.shape) / changes.size
+
+        abs_change_history = np.abs(sensory_state.observations_alt[:, effect_variables])
+
+        p = 1 - np.sum(changes * attention_params) / (np.sum(changes * attention_params) + abs_change_history.mean())
+
+        return p
+
         
 
 
-    def _experience_action_values(self, action, rollback, external_state, sensory_state, internal_state):
-        # Compute experience gained from action and rollback
-        # Can be in information gained or change produced
-        experience_gained, learning_rates = self._experience_gained_func(action, rollback, external_state, sensory_state, internal_state)
-
-        action_values = self._action_values[self._n - rollback] + learning_rates * (experience_gained - self._action_values[self._n - rollback])
-
-        return action_values
 
 
