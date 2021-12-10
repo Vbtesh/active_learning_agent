@@ -10,5 +10,5 @@ class Omniscient_ST(Sensory_state):
 
     def omniscient_observation(self, external_state, internal_state):
         alt = self.s_alt
-        change_update = (external_state.x - self.s) + self._gamma * self.s_alt
+        change_update = (external_state.x - self.s)/100 + self._gamma * self.s_alt
         return external_state.x, change_update

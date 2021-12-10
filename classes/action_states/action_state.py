@@ -209,7 +209,7 @@ class Action_state():
 
 # Tree search action selection
 class Treesearch_AS(Action_state):
-    def __init__(self, N, K, behaviour, possible_actions, action_len, policy_funcs, epsilon, C, knowledge, tree_search_func, tree_search_func_args=[]):
+    def __init__(self, N, K, behaviour, epsilon, possible_actions, action_len, policy_funcs, C, knowledge, tree_search_func, tree_search_func_args=[]):
         super().__init__(N, K, behaviour, epsilon, self._tree_search_action_sample, self._tree_search_action_fit)
 
         # Num of possible action is all possible values for all variable plus 1 for staying idle
@@ -382,7 +382,7 @@ class Treesearch_AS(Action_state):
 # Experience based action selection
 ## Action values are considered state independent
 class Experience_AS(Action_state):
-    def __init__(self, N, K, behaviour, possible_actions, policy_funcs, epsilon, experience_gained_func):
+    def __init__(self, N, K, behaviour, epsilon, possible_actions, policy_funcs, experience_gained_func):
         super().__init__(N, K, behaviour, epsilon, self._experience_action_sample, self._experience_action_fit)
 
         self._poss_actions = possible_actions
@@ -412,18 +412,19 @@ class Experience_AS(Action_state):
         self._acting = None
 
 
+    ## SAMPLE ACTION IS NEXT
     def _experience_action_sample(self, external_state, sensory_state, internal_state):
         # Compute action values
         action_values = self._experience_action_values(external_state, sensory_state, internal_state) 
 
         # Sample a sequence of actions
-        sampled_action, sampled_length = self._policy(action_values)
+        sampled_action, sampled_length, sampled_obs = self._policy(action_values)
 
         # Update history
         self._action_values[self._n] = action_values  
 
         # Return action remapped to the action (idx) to tuple (variable, value)
-        return sampled_action, sampled_length
+        return sampled_action, sampled_length, sampled_obs
 
 
     # Logic is complex as the likelihood of performing an action has to be computed for the index - action length

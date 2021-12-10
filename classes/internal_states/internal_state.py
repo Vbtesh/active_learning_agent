@@ -5,7 +5,6 @@ import pandas as pd
 from scipy import stats
 from scipy.stats import distributions
 
-from methods.smoothing import entropy, smooth
 
 
 # Main Internal state class
@@ -145,7 +144,6 @@ class Internal_state():
 class Discrete_IS(Internal_state):
     def __init__(self, N, K, prior_params, links, dt, theta, sigma, update_func, update_func_args=[], sample_params=True, smoothing=0):
 
-
         super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
 
         self._num_links = len(links)
@@ -284,18 +282,18 @@ class Discrete_IS(Internal_state):
 
         smoother = ( dist.shape[1] - np.abs(indices - max_dist) ) / dist.shape[1]
 
-        certainty_coef = np.exp(- self._entropy(dist)) * self._smoothing_temp
+        certainty_coef = np.exp(- self._entropy(dist, custom=True)) * self._smoothing_temp
 
         smoothed_values = dist + certainty_coef * smoother
 
         return smoothed_values / smoothed_values.sum(axis=1).reshape((dist.shape[0], 1))
 
 
-    def _entropy(self, distribution):
+    def _entropy(self, distribution, custom=False):
         log_dist = np.log2(distribution, where=distribution!=0)
         log_dist[log_dist == -np.inf] = 0
 
-        if len(distribution.shape) == 1:
+        if len(distribution.shape) == 1 or custom:
             return - np.sum(distribution * log_dist)
         elif len(distribution.shape) == 3:
             return - np.squeeze(np.sum(distribution * log_dist, axis=2).sum(axis=1))
