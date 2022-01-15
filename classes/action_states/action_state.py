@@ -17,7 +17,7 @@ class Action_state():
 
         # Sets up the length and associated attribute 
         self._action_len = None
-        self._action_idx = 0
+        
 
         # Default current action
         self._current_action = None
@@ -34,8 +34,9 @@ class Action_state():
         self._fit_action = fit_action_func
 
         # Action history
-        self._action_len_history = [None for i in range(self._N+1)]
+        ## Generic list for any action specification (depends on model)
         self._actions_history = [None for i in range(self._N+1)]
+        ## Variables intervened on for future fitting
         self._variable_history = np.zeros(self._N+1)
         self._variable_history[:] = np.nan
  
@@ -53,25 +54,11 @@ class Action_state():
             self._n += 1
             return None
 
-        self._action_idx += 1
-        if self._action_idx >= self._action_len or self._n == 0:
-            # If policy is random return random action
-            if self._behaviour == 'random':
-                self._current_action = self._remap_action(np.random.choice(self._num_actions))
-            else:
-                # Sample action using the sample action func
-                sampled_action, length = self._sample_action(external_state, sensory_state, internal_state)
-                self._current_action = sampled_action
-                self._action_len = length
+        # Sample_action function.
+        self._current_action = self._sample_action(external_state, sensory_state, internal_state)
 
-            # Update history  
-            self._action_len_history[self._n] = self._action_len
-            self._actions_history[self._n] = self._current_action 
-            if type(self._current_action) == tuple:
-                self._variable_history[self._n] = self._current_action[0]
-
-            # Reset action idx
-            self._action_idx = 0
+        if type(self._current_action) == tuple:
+            self._variable_history[self._n] = self._current_action[0]
 
         self._n += 1
         return self._current_action
@@ -153,18 +140,14 @@ class Action_state():
 
             # Reset Action values history, Action seq hist and planned actions
             self._action_values = [None for i in range(self._N+1)]
-            self._action_seqs_values = [None for i in range(self._N+1)]
-            self._action_seqs = [None for i in range(self._N+1)]
-            self._planned_actions = [None for i in range(self._N+1)]
+            self._actions_history = [None for i in range(self._N+1)]
         else:
             self._n -= back
 
             # Reset Action values, seq and planned action from n to N
             for n in range(self._n+1, self._N+1):
                 self._action_values[n] = None
-                self._action_seqs_values[n] = None
-                self._action_seqs[n] = None
-                self._planned_actions[n] = None
+                self._actions_history[n] = None
 
 
     @property
@@ -224,7 +207,8 @@ class Treesearch_AS(Action_state):
         self._tree_search_func = tree_search_func
         self._tree_search_func_args = tree_search_func_args
 
-        # Action length 
+        # Action sampling parameters
+        self._action_idx = 0
         self._action_len = action_len
 
         # A function that takes action values as arguments and return an sequence of actions which is then remapped onto action_seqs and then split using the remap_action function
@@ -244,17 +228,36 @@ class Treesearch_AS(Action_state):
         self._C = C    
 
 
-    def _tree_search_action_sample(self, external_state, sensory_state, internal_state):   
-        action_values = self._tree_search_action_values(external_state, sensory_state, internal_state) 
+    def _tree_search_action_sample(self, external_state, sensory_state, internal_state):  
+        # If time to act, sample new action
+        if self._action_idx >= self._action_len or self._n == 0:
+            # Reset action_idx
+            self._action_idx = 0
+            
+            # If behaviour is random, return a random action
+            if self._behaviour == 'random':
+                return self._remap_action(np.random.choice(self._num_actions))
 
-        # Sample a sequence of actions
-        sampled_action = self._policy(action_values)
+            # Compute action values
+            action_values = self._tree_search_action_values(external_state, sensory_state, internal_state) 
 
-        # Update history
-        self._action_values[self._n] = action_values  
+            # Sample a sequence of actions
+            sampled_action = self._policy(action_values)
 
-        # Return action remapped to the action (idx) to tuple (variable, value)
-        return self._remap_action(sampled_action), self._action_len
+            # Update history
+            self._action_values[self._n] = action_values  
+            self._actions_history[self._n] = sampled_action
+
+            # Reset action_idx
+            self._action_idx = 0
+
+            # Return action remapped to the action (idx) to tuple (variable, value), action len, obs len
+            return self._remap_action(sampled_action)
+       
+        else:
+            self.action_idx += 1
+            # If not time to act again, simply return None
+            return None
 
 
     def _tree_search_action_fit(self, action, external_state, sensory_state, internal_state):   
@@ -271,7 +274,8 @@ class Treesearch_AS(Action_state):
         action_log_prob = np.log(action_prob)
 
         # Update history
-        self._action_values[self._n] = action_values  
+        self._action_values[self._n] = action_values 
+        self._action_len_history[self._n] = self._action_len  
 
         # Return action remapped to the action (idx) to tuple (variable, value)
         return action_log_prob
@@ -387,8 +391,6 @@ class Experience_AS(Action_state):
 
         self._poss_actions = possible_actions
         self._action_grid = np.arange(self._K * len(possible_actions)).reshape(self._K, len(possible_actions))
-        # Lingering observations time
-        self._linger = 0
 
         # A function that takes action values as arguments and return an sequence of actions which is then remapped onto action_seqs and then split using the remap_action function
         # Argument must be action values over all possible actions
@@ -406,25 +408,118 @@ class Experience_AS(Action_state):
         self._prob_variable = np.zeros((self._N+1, self._K))
         self._prob_sign = np.zeros((self._N+1, 2))
 
-        # Acting state
+        # Acting variables
         self._current_action = None
+        self._action_len = 0
+        self._obs_len = 0
+
+        # Variables for action tracking
+        self._action_idx = 0
+        self._obs_idx = 0
+        self._acting = False
+
+        # Variables for action fitting
         self._previous_action = None
-        self._acting = None
+        
 
 
-    ## SAMPLE ACTION IS NEXT
+    # Action sampling function
+    ## Return None if no obs or no action, action otherwise
     def _experience_action_sample(self, external_state, sensory_state, internal_state):
-        # Compute action values
-        action_values = self._experience_action_values(external_state, sensory_state, internal_state) 
+        if self._acting:
+            
+            # If not done acting, do sign change check and return
+            if self._action_idx < self._action_len:
 
-        # Sample a sequence of actions
-        sampled_action, sampled_length, sampled_obs = self._policy(action_values)
+                # Sample sign if at least 1 sec has elapsed
+                if self._action_idx % (1/self._dt) == 0:
+                    if self._behaviour == 'random':
+                        sign = np.random.choice([-1, 1])
+                    else:
+                        p_sign = self._compute_sign_change_prob(sensory_state)
+                        sign = np.random.choice([-1, 1], p=p_sign)
 
-        # Update history
-        self._action_values[self._n] = action_values  
+                    sampled_action = (self._current_action[0], sign*self._current_action[1])
+                else:
+                    sampled_action = self._current_action
 
-        # Return action remapped to the action (idx) to tuple (variable, value)
-        return sampled_action, sampled_length, sampled_obs
+                # Update history
+                self._actions_history[self._n] = [sampled_action, self._action_len, self._obs_len]
+                
+                # Increment action index
+                self._action_idx += 1
+
+                return sampled_action
+
+            # If done acting, do nothing
+            ## Reset acting variables
+            self._acting = False
+            self._action_idx = 0
+
+            ## Increment observing index
+            self._obs_idx += 1
+
+            return None
+        
+        else:
+            # If still observing, do nothing
+            if self._obs_idx < self._obs_len:
+                # Increment obs index
+                self._obs_idx += 1
+                
+                return None
+            
+            # If done observing, sample new action
+            # If behaviour is random, sample at random:
+            if self._behaviour == 'random':
+                ## Sample variable
+                variable = np.random.choice(np.arange(self._K))
+                ## Sample action
+                sampled_value = np.random.choice(self._poss_actions)
+                sampled_length = np.random.choice(np.arange(self._max_acting_time))
+                sampled_obs = np.random.choice(np.arange(self._max_obs_time))
+                ## Sample sign
+                sign = np.random.choice([-1, 1])
+
+                # Combine action
+                sampled_action = (variable, sign*sampled_value)             
+            
+            # Else, sample properly action according to model
+            else:
+                # Compute action values
+                action_values = self._experience_gained_func(self._current_action, self._action_len, self._obs_len, external_state, sensory_state, internal_state) 
+
+                # Sample an action
+                ## Sample variable
+                p_var = self._compute_variable_prob(internal_state)
+                variable = np.random.choice(np.arange(p_var.size), p=p_var)
+                ## Sample action
+                sampled_action_idx, sampled_length, sampled_obs = self._policy(action_values)
+                ## Sample sign
+                p_sign = self._compute_sign_change_prob(sensory_state)
+                sign = np.random.choice([-1, 1], p=p_sign)
+
+                # Combine action
+                sampled_action = (variable, sign*self._poss_actions[sampled_action_idx])
+
+                # Update action value history
+                self._action_values[self._n] = action_values  
+
+
+            # Convert length and obs to datapoint
+            self._action_len = sampled_length / self._dt
+            self._obs_len = sampled_obs / self._dt
+
+            # Update action len and obs history
+            self._actions_history[self._n] = [sampled_action, self._action_len, self._obs_len]
+
+            # Reset observing index and toggle acting if length > 0
+            self._obs_idx = 0
+            if self._action_len > 0:
+                self._acting = True
+            
+            # Return action remapped to the action (idx) to tuple (variable, value)
+            return sampled_action
 
 
     # Logic is complex as the likelihood of performing an action has to be computed for the index - action length
@@ -442,7 +537,7 @@ class Experience_AS(Action_state):
             # No acting done here
             self._acting = False
             # Observation after action, update action values for previous action
-            self._action_values[self._n] = self._experience_action_values(self._previous_action, external_state, sensory_state, internal_state)
+            self._action_values[self._n] = self._experience_gained_func(self._previous_action, external_state, sensory_state, internal_state)
             # Increment observed length
             self._obs_len += 1
             return 0
@@ -487,21 +582,27 @@ class Experience_AS(Action_state):
         return p_var
 
 
-    def _compute_sign_change_prob(self, action, sensory_state):
+    def _compute_sign_change_prob(self, sensory_state):
         if not self._acting:
-            return np.ones(self._K) / self._K
+            return np.ones(2) / 2
 
-        effect_variables = np.arange(self._K) != action[0]
+        effect_variables = np.arange(self._K) != self._current_action[0]
         changes = np.abs(sensory_state.s_alt[effect_variables])
 
         # Parameters that describes the attention given to the effect variables, default is uniform
         attention_params = np.ones(changes.shape) / changes.size
 
-        abs_change_history = np.abs(sensory_state.observations_alt[:, effect_variables])
+        abs_change_history = np.abs(sensory_state.obs_alt[:, effect_variables])
 
         p = 1 - np.sum(changes * attention_params) / (np.sum(changes * attention_params) + abs_change_history.mean())
 
-        return p
+        # Standardise it so that first is p-negative and second is p-positive
+        if self._current_action[1] < 0:
+            p_std = np.array([1-p, p])
+        else:
+            p_std = np.array([p, 1-p])
+        
+        return p_std
 
         
 

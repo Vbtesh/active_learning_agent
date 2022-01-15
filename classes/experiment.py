@@ -91,8 +91,6 @@ class Experiment():
             print('Call the run method to generate data.')
             return
 
-        palette = sns.color_palette("husl", 8)
-
         if self._iter == 1:
             plt.figure(figsize=(12, 8))
             plt.subplot(2, 2, 1)
@@ -111,8 +109,24 @@ class Experiment():
                 print('Posterior judgement:', self.agent.internal_state._judgement_final)
 
         else:
+            palette = sns.color_palette("husl", 8)
             for i in range(self._iter):
                 sns.lineplot(self._entropy_hist[i,:], palette=palette)
+
+
+    def change_report(self):
+        if not self._i <= self._iter:
+            print('Call the run method to generate data.')
+            return
+
+        if self._iter == 1:
+            # Plot alternate perceptions
+            plt.figure(figsize=(12, 8))
+            plt.subplot(2, 2, 1)
+            self.agent.plot_alt_perceptions()
+
+
+
 
 
 

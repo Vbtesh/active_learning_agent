@@ -228,7 +228,7 @@ class Discrete_IS(Internal_state):
         if uniform:
             graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size)
         else:
-            graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size, p=self.posterior)
+            graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size, p=self.posterior_over_models)
             
         if as_matrix:
             return self._sample_space_as_mat[graph_idx].squeeze()

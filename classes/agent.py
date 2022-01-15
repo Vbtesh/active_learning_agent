@@ -157,8 +157,7 @@ class Agent():
             ax.fill_between(x, y1, y2, color=palette[i], alpha=0.15)
 
         plt.title('Network Alternative Perception')
-        plt.ylim(self._range[0] / 2, self._range[1]/ 2)
-        plt.ylim(self._range[0] / 100, self._range[1]/ 100)
+        plt.ylim(data_obs_alt.min(),data_obs_alt.max())
 
     def plot_entropy_history(self, colour='blue'):
         entropy = self.internal_state.entropy_history

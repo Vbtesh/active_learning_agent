@@ -1,14 +1,48 @@
 from classes.sensory_states.sensory_state import Sensory_state
+import numpy as np
 
 # Oniscient sensor
 ## Returns extactly the external states
 class Omniscient_ST(Sensory_state):
-    def __init__(self, N, K, gamma=0.5):
+    def __init__(self, N, K, alpha=0.5, change='relative', value_range=(-100, 100)):
         super().__init__(N, K, self.omniscient_observation)
-        self._gamma = gamma
+        self._alpha = alpha
         self._obs_alt_record = True
 
+        self.change_summary = change
+        
+        if change == 'relative':
+            self._change_function = self._relative_change
+            self.alt_range = (-5, 5)
+        elif change == 'normalised':
+            self._change_function = self._normalised_change
+            self.alt_range = (value_range[0]/100, value_range[1]/100)
+        else:
+            self._change_function = self._raw_change
+            self.alt_range = (value_range[0]/4, value_range[1]/4)
+
+
     def omniscient_observation(self, external_state, internal_state):
-        alt = self.s_alt
-        change_update = (external_state.x - self.s)/100 + self._gamma * self.s_alt
+        change_update = self._change_function(external_state)
         return external_state.x, change_update
+
+
+    def _raw_change(self, external_state):
+        sense = self.s
+        change_update = self.s_alt + self._alpha * ((external_state.x - sense) - self.s_alt)
+        return change_update
+
+
+    def _relative_change(self, external_state):
+        sense = self.s
+        if np.sum(self.s == 0):
+            sense[self.s == 0] = 1
+        change_update = self.s_alt + self._alpha * ((external_state.x - sense)/sense - self.s_alt)
+        return change_update
+
+
+    def _normalised_change(self, external_state):
+        sense = self.s
+        bound = external_state._range[1]
+        change_update = self.s_alt + self._alpha * ((external_state.x - sense)/bound - self.s_alt)
+        return change_update

@@ -10,15 +10,16 @@ from classes.internal_states.normative_DIS import Normative_DIS
 
 from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
 from classes.action_states.undiscounted_gain_hard_horizon_TSAS import Undiscounted_gain_hard_horizon_TSAS
+from classes.action_states.experience_3D_AS import Experience_3D_AS
 
 from classes.sensory_states.omniscient_ST import Omniscient_ST
 
 from classes.agent import Agent
 from classes.experiment import Experiment
 
-from methods.policies import softmax_policy_init
+from methods.policies import softmax_policy_init, three_d_softmax_policy_init
 from methods.empirical_priors import generate_discrete_empirical_priors, generate_gaussian_empirical_priors
-
+from methods.action_values_priors import action_values_from_mtv_norm
 
 
 
@@ -28,12 +29,12 @@ def main():
         modelling_data = pickle.load(inFile)
 
 
-    part_key = '60a2541c0e5a829853aad745'
+    part_key = '60bd04a3749e1ca47e54d3e1'
     conditions = ['generic', 'congruent', 'incongruent', 'implausible']
     cond = conditions[3]
     
     # Model fitting
-    fitting = True # If false, no data will be used 
+    fitting = False # If false, no data will be used 
 
     ## Data from trial
     part_data = modelling_data[part_key]['trials'][cond]
@@ -106,10 +107,14 @@ def main():
     poss_actions = np.arange(-100, 100)
     poss_actions = np.array([85, 45, 0, -45, -85])
     poss_actions = np.arange(-100, 101, step=10)
+    poss_actions_abs = np.arange(0, 101, step=10)
+
     ## Define action length (TO BE REFINED FOR FITTING DATA)
     action_len = 5 
     ## Policy for action selection from action values
     policy_funcs = softmax_policy_init(1) # Returns three function: sample, pmf, params
+    policy_funcs_3d = three_d_softmax_policy_init(1)
+
     ## Parameters
     epsilon = 1e-2 # Certainty threshold: agent stops intervening after entropy goes below epsilon
     knowledge = False  # Can be a model as nd.array, True for perfect knowledge, 'random' for random sampling and False for posterior based sampling
@@ -118,18 +123,34 @@ def main():
     discount = 0.01 # For soft horizon discounted gain
     depth = 1 # Horizon for hard horizon undiscounted gain
 
-    # Gamma for change in sensory state
-    gamma = 0.7
+    ## Special parameters for experience actions states
+    max_acting_time = 10
+    max_obs_time = 10
+    experience_measure = 'change' # Can be "information" or "change"
 
+    mus = np.array([80, 6, 2])
+    cov = np.array([[20**2, 0, 0],
+                   [0, 1, 0],
+                   [0, 0, 1]])
+    dist, dist_3d, prior_action_values, sample_space = action_values_from_mtv_norm(poss_actions[poss_actions > 0], 
+                                                                                   max_acting_time, 
+                                                                                   max_obs_time,
+                                                                                   mus, cov)
+
+    # alpha, learning rate for change in sensory state
+    alpha = 1/3
+    change = 'raw' # Can be 'normalised', 'relative', 'raw'
+    
     ## General behaviour parameter
-    behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
+    behaviour = 'actor'   # Can be 'obs', 'random' or 'actor'
     
 
-    sensory_state = Omniscient_ST(N, K, gamma)
+    sensory_state = Omniscient_ST(N, K, alpha, change)
     
     action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, epsilon, poss_actions, action_len, policy_funcs, C, knowledge, discount, horizon)
     action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, epsilon, poss_actions, action_len, policy_funcs, C, knowledge, depth)
-    
+    action_state = Experience_3D_AS(N, K, behaviour, epsilon, poss_actions_abs, policy_funcs_3d, dt, max_acting_time, max_obs_time, experience_measure, prior_action_values)
+
     internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
     internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
     #internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)

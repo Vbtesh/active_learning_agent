@@ -45,18 +45,27 @@ def epsilon_greedy_init(epsilon):
     return e_greedy_policy, pmf_e_greedy_policy, params_e_greedy_policy
 
 
-def two_d_softmax_policy_init(temperature):
+def three_d_softmax_policy_init(temperature):
 
-    def two_d_softmax_policy(action_values):
-        p = np.exp(temperature * action_values) / np.sum(np.exp(temperature * action_values))
-        return np.random.choice(np.arange(p.size), p=p)
+    def three_d_softmax_policy(action_values):
+        dims = action_values.shape
+        action_idx = np.arange(action_values.size).reshape(dims)
 
-    def pmf_d_step_softmax_policy(action_taken, action_len, action_values):
+        p = np.exp(temperature * action_values.flatten()) / np.sum(np.exp(temperature * action_values.flatten()))
+
+        choice = np.random.choice(np.arange(p.size), p=p)
+
+        x, y, z = np.where(action_idx == choice)
+
+        return x[0], y[0], z[0]
+
+
+    def pmf_three_d_softmax_policy(action_taken, action_len, action_values):
         action_v = action_taken[1]
         p = np.exp(temperature * action_values) / np.sum(np.exp(temperature * action_values))
         return p[action_v, action_len-1]
 
-    def params_d_step_softmax_policy(action_values):
+    def params_three_d_softmax_policy(action_values):
         return np.exp(temperature * action_values) / np.sum(np.exp(temperature * action_values))
 
-    return two_d_softmax_policy, pmf_d_step_softmax_policy, params_d_step_softmax_policy
+    return three_d_softmax_policy, pmf_three_d_softmax_policy, params_three_d_softmax_policy
