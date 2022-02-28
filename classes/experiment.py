@@ -72,7 +72,7 @@ class Experiment():
 
                 if n % 10 == 0 and console:
                     print('Iter:', n)
-                    print('Current MAP:', self.agent.internal_state.map, 'Entropy:', self.agent.internal_state.posterior_entropy)
+                    print('Current MAP:', self.agent.internal_state.MAP, 'Entropy:', self.agent.internal_state.posterior_entropy)
                     #print('Current posterior:')
                     #print(np.around(agent.model.posterior_links, 2))
 
@@ -80,7 +80,7 @@ class Experiment():
                 self._n += 1
 
             print('Iter:', n)
-            print('True model:', self.external_state.causal_vector, 'Final MAP:', self.agent.internal_state.map)
+            print('True model:', self.external_state.causal_vector, 'Final MAP:', self.agent.internal_state.MAP)
 
             self._entropy_history[i, :] = self.agent.internal_state.entropy_history
             self._i += 1
@@ -104,7 +104,7 @@ class Experiment():
                 self.agent.plot_alt_perceptions()
 
             print('True model:', self.external_state.causal_vector)
-            print('Final MAP:', self.agent.internal_state.map)
+            print('Final MAP:', self.agent.internal_state.MAP)
             if self.external_state._realised:
                 print('Posterior judgement:', self.agent.internal_state._judgement_final)
 

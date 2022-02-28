@@ -52,20 +52,46 @@ def three_d_softmax_policy_init(temperature):
         action_idx = np.arange(action_values.size).reshape(dims)
 
         p = np.exp(temperature * action_values.flatten()) / np.sum(np.exp(temperature * action_values.flatten()))
-
         choice = np.random.choice(np.arange(p.size), p=p)
 
-        x, y, z = np.where(action_idx == choice)
-
-        return x[0], y[0], z[0]
+        return np.where(action_idx == choice)
 
 
-    def pmf_three_d_softmax_policy(action_taken, action_len, action_values):
-        action_v = action_taken[1]
-        p = np.exp(temperature * action_values) / np.sum(np.exp(temperature * action_values))
-        return p[action_v, action_len-1]
+    def pmf_three_d_softmax_policy(action_v_idx, action_len, action_obs, action_values):
+        dims = action_values.shape
+        p = np.exp(temperature * action_values.flatten()) / np.sum(np.exp(temperature * action_values.flatten()))
+        p_3d = p.reshape(dims)
+
+        return p_3d[action_v_idx, action_len, action_obs]
 
     def params_three_d_softmax_policy(action_values):
-        return np.exp(temperature * action_values) / np.sum(np.exp(temperature * action_values))
+        dims = action_values.shape
+        p = np.exp(temperature * action_values) / np.sum(np.exp(temperature * action_values))
+        
+        return p.reshape(dims)
 
     return three_d_softmax_policy, pmf_three_d_softmax_policy, params_three_d_softmax_policy
+
+
+# Any discrete probability distribution without action values over any dimensions
+def discrete_policy_init():
+
+    def discrete_policy(distribution):
+        dims = distribution.shape
+        actions = np.arange(distribution.size).reshape(dims)
+
+        choice = np.random.choice(actions.flatten(), p=distribution.flatten())
+
+        return np.where(actions == choice)
+
+
+    def pmf_discrete_policy(observation, distribution):
+        return distribution[tuple(observation)]
+
+
+    def params_discrete_policy(distribution):
+        return distribution
+
+    return discrete_policy, pmf_discrete_policy, params_discrete_policy
+
+

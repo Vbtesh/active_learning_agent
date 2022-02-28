@@ -1,13 +1,23 @@
-from classes.internal_states.internal_state import Continuous_IS
+from random import sample
+from classes.internal_states.internal_state import Continuous_omniscient_IS
 from scipy import stats
 import numpy as np
 
-from methods.smoothing import entropy, smooth
 
-# Local computation discrete agent
-class Local_computations_omniscient_CIS(Continuous_IS):
+# Local computations continuous agent
+class Local_computations_omniscient_CIS(Continuous_omniscient_IS):
     def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=0, init_obs=None):
-        super().__init__(N, K, prior_params, links, dt, theta, sigma, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+        super().__init__(N, K, prior_params, links, dt, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+
+        # Sample parameter estimates
+        if sample_params:
+            # Sample key variables according to Davis, Rehder, Bramley (2018)
+            self._theta = stats.gamma.rvs(100*theta, scale=1/100, size=1)
+            self._sigma = stats.gamma.rvs(100*sigma, scale=1/100, size=1)
+        else:
+            # Assume perfect knowledge
+            self._theta = theta
+            self._sigma = sigma  
 
         self._prior_params = prior_params
         self._init_priors()
@@ -70,31 +80,31 @@ class Local_computations_omniscient_CIS(Continuous_IS):
 
     
     def _entropy_distribution(self, parameters):
-        return np.sum(stats.norm.entropy(scale=parameters[:, 1]))
+        return stats.norm.entropy(scale=parameters[:, 1])
+
+
+    def _posterior_pmf(self, params):
+        means = params[:, 0].reshape((params.shape[0], 1))
+        sds = params[:, 1].reshape((params.shape[0], 1))
+
+        discrete_pmf = stats.norm.cdf(self._L + self._interval, loc=means, scale=sds) - stats.norm.cdf(self._L - self._interval, loc=means, scale=sds)
+        discrete_pmf_norm = discrete_pmf / discrete_pmf.sum(axis=1).reshape((means.shape))
+
+        return discrete_pmf_norm
 
 
     def _pdf(self, obs):
-        means = self._posterior_params[:, 0].reshape((self._posterior_params.shape[0], 1))
-        sds = self._posterior_params[:, 1].reshape((self._posterior_params.shape[0], 1))
+        discrete_PMF = self.posterior
+        logic = np.tile(self._L, (discrete_PMF.shape[0], 1)) == obs.reshape((discrete_PMF.shape[0], 1))
 
-        discretised_PMF = stats.norm.cdf(self._L + self._interval, loc=means, scale=sds) - stats.norm.cdf(self._L - self._interval, loc=means, scale=sds)
-        discretised_norm_PMF = discretised_PMF / discretised_PMF.sum(axis=1).reshape(means.shape)
-        smoothed_PMF = self._smooth(discretised_norm_PMF)
-        logic = np.tile(self._L, (means.size, 1)) == obs.reshape(means.shape)
-
-        return smoothed_PMF[logic]
+        return discrete_PMF[logic]
 
     
     def _link_pdf(self, link_idx, link_value):
-        means = self._posterior_params[:, 0].reshape((self._posterior_params.shape[0], 1))
-        sds = self._posterior_params[:, 1].reshape((self._posterior_params.shape[0], 1))
-
-        discretised_PMF = stats.norm.cdf(self._L + self._interval, loc=means, scale=sds) - stats.norm.cdf(self._L - self._interval, loc=means, scale=sds)
-        discretised_norm_PMF = discretised_PMF / discretised_PMF.sum(axis=1).reshape(means.shape)
-        smoothed_PMF = self._smooth(discretised_norm_PMF)
-        link_smoothed_PMF = smoothed_PMF[link_idx, :]
+        discrete_PMF = self.posterior
+        link_discrete_PMF = discrete_PMF[link_idx, :]
         logic = np.squeeze(self._L == link_value)
         
-        return link_smoothed_PMF[logic][0]
+        return link_discrete_PMF[logic][0]
 
     

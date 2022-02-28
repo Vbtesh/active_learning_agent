@@ -140,8 +140,20 @@ class Internal_state():
         return causal_vec
 
 
+class Summary_IS(Internal_state):
+    def __init__(self, N, K, prior_params, links, params, update_func, update_func_args=[], smoothing=0):
+        super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
+
+        self._smoothing_temp = smoothing
+
+    
+
+
+
+
+
 # Internal state using a discrete probability distribution to represent the external states
-class Discrete_IS(Internal_state):
+class Discrete_omniscient_IS(Internal_state):
     def __init__(self, N, K, prior_params, links, dt, theta, sigma, update_func, update_func_args=[], sample_params=True, smoothing=0):
 
         super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
@@ -205,7 +217,7 @@ class Discrete_IS(Internal_state):
             return self._links_to_models(self.posterior) 
 
     @property
-    def map(self):
+    def MAP(self):
         graph_idx = np.argmax(self.posterior_over_models)
         return self._sample_space[graph_idx]
 
@@ -344,19 +356,20 @@ class Discrete_IS(Internal_state):
 
 
 # Internal state using a continuous probability distribution to represent the external states
-class Continuous_IS(Internal_state):
-    def __init__(self, N, K, prior_params, links, dt, theta, sigma, update_func, update_func_args=[], sample_params=True, smoothing=0):
+## Need to be able to express discrete probability values
+class Continuous_omniscient_IS(Internal_state):
+    def __init__(self, N, K, prior_params, links, dt, update_func, update_func_args=[],  sample_params=True, smoothing=0):
         super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
 
-        self._dt = dt
+        # Smoothing temperature
         self._smoothing_temp = smoothing
-        
+
+        # General dt
+        self._dt = dt
+
         # Sample parameter estimates
         if sample_params:
             # Sample key variables according to Davis, Rehder, Bramley (2018)
-            self._theta = stats.gamma.rvs(100*theta, scale=1/100, size=1)
-            self._sigma = stats.gamma.rvs(100*sigma, scale=1/100, size=1)
-
             self._L = np.zeros(len(links))
             for i, l in enumerate(links):
                 if l < 0:
@@ -365,32 +378,84 @@ class Continuous_IS(Internal_state):
                     self._L[i] = 0
                 else:
                     self._L[i] = stats.gamma.rvs(100*l, scale=1/100)
+
+            self._interval = np.abs(self._L[0] - self._L[1])
+            
         else:
             # Assume perfect knowledge
-            self._theta = theta
-            self._sigma = sigma
             self._L = links
             self._interval = np.abs(self._L[0] - self._L[1])
+        
+        
+        # Build representational spaces
+        self._sample_space = self._build_space(self._L) # Sample space as set of vectors with link values
+        self._indexed_space = self._build_space(np.arange(len(self._L))).astype(int) # Same as above but link values are indices
+        self._sample_space_as_mat = self._build_space(self._L, as_matrix=True) # Sample space as a set of causality matrices, i.e. one for each model
 
-    
+
     # Properties
     @property
-    def posterior(self):
+    def posterior_params(self):
         return self._posterior_params
 
     @property
-    def map(self):
+    def posterior(self):
+        return self._smooth(self._posterior_pmf(self._posterior_params))
+    
+    @property
+    def posterior_over_links(self):
+        return self.posterior
+
+    @property
+    def posterior_over_models(self):
+        return self._links_to_models(self.posterior) 
+
+    @property
+    def MAP(self):
         return self._argmax()
 
     @property
-    def posterior_entropy(self):
-        return self._diff_entropy(self.posterior)
+    def posterior_over_links(self):
+        if len(self.posterior.shape) == 1:
+            return self._models_to_links(self.posterior)
+        else:
+            return self.posterior
+
+    @property
+    def posterior_over_models(self):
+        if len(self.posterior.shape) == 1:
+            return self.posterior
+        else:
+            return self._links_to_models(self.posterior) 
     
+    @property
+    def posterior_discrete_entropy(self):
+        return self._entropy(self.posterior_over_links, custom=True)
+
+    @property
+    def posterior_discrete_entropy_over_links(self):
+        return self._entropy(self.posterior_over_links)
+    
+    @property
+    def discrete_entropy_history(self):
+        entropy_history = np.zeros(len(self._posterior_params_history))
+        for i in range(entropy_history.size):
+            entropy_history[i] = np.sum(self._entropy(self._posterior_pmf(self._posterior_params_history[i])))  
+        return entropy_history
+    
+    @property
+    def posterior_entropy(self):
+        return np.sum(self._diff_entropy(self.posterior_params))
+
+    @property
+    def posterior_entropy_over_links(self):
+        return self._diff_entropy(self.posterior_params)
+
     @property
     def entropy_history(self):
         entropy_history = np.zeros(len(self._posterior_params_history))
         for i in range(entropy_history.size):
-            entropy_history[i] = self._diff_entropy(self._posterior_params_history[i])
+            entropy_history[i] = np.sum(self._diff_entropy(self._posterior_params_history[i]))
         return entropy_history
 
 
@@ -433,11 +498,11 @@ class Continuous_IS(Internal_state):
         return self._entropy_distribution(parameters)
 
     
-    def _entropy(self, distribution):
+    def _entropy(self, distribution, custom=False):
         log_dist = np.log2(distribution, where=distribution!=0)
         log_dist[log_dist == -np.inf] = 0
 
-        if len(distribution.shape) == 1 or distribution.shape == (self._K**2 - self._K, self._L.size):
+        if len(distribution.shape) == 1 or custom:
             return - np.sum(distribution * log_dist)
         elif len(distribution.shape) == 3:
             return - np.squeeze(np.sum(distribution * log_dist, axis=2).sum(axis=1))
@@ -457,11 +522,52 @@ class Continuous_IS(Internal_state):
 
         smoother = ( dist.shape[1] - np.abs(indices - max_dist) ) / dist.shape[1]
 
-        certainty_coef = np.exp(- self._entropy(dist)) * self._smoothing_temp
+        certainty_coef = np.exp(- self._entropy(dist, custom=True)) * self._smoothing_temp
 
         smoothed_values = dist + certainty_coef * smoother
 
         return smoothed_values / smoothed_values.sum(axis=1).reshape((dist.shape[0], 1))
+
+
+    def _models_to_links(self, models_probs, intervention=None):
+        s = self._K**2 - self._K
+        links_probs = np.zeros((s, self._num_links))
+        for j in range(s):
+            for k in range(self._num_links):
+                links_probs[j, k] = np.sum(models_probs[self._indexed_space[:,j] == k])
+
+        if intervention:
+            links_probs[self.causes_idx[intervention], :] = 0 # Not sure yet about value
+            
+        return links_probs
+
+
+    def _links_to_models(self, links_probs):
+        return links_probs[np.arange(links_probs.shape[0]), self._indexed_space].prod(axis=1)
+
+    def _build_space(self, links, as_matrix=False):
+        a = links 
+        c = len(links)
+        s = self._K**2 - self._K
+
+        S = np.zeros((c**s, s))
+
+        for i in range(s):
+            ou = np.tile(a, (int(c**(s-i-1)), 1)).flatten('F')
+            os = tuple(ou for _ in range(c**i))
+            o = np.concatenate(os)
+
+            S[:, i] = o.T
+        
+        if not as_matrix:
+            return S
+        else:
+            S_mat = np.zeros((c**s, self._K, self._K))
+
+            for i in range(c**s):
+                S_mat[i, :, :] = self._causality_matrix(S[i, :], fill_diag=1)
+            
+            return S_mat
         
 
 

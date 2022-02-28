@@ -1,9 +1,9 @@
-from classes.internal_states.internal_state import Discrete_IS
+from classes.internal_states.internal_state import Discrete_omniscient_IS
 from scipy import stats
 import numpy as np
 
 # Local computation discrete agent
-class Local_computations_omniscient_DIS(Discrete_IS):
+class Local_computations_omniscient_DIS(Discrete_omniscient_IS):
     def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=False):
         super().__init__(N, K, prior_params, links, dt, theta, sigma, self._update_rule, sample_params=sample_params, smoothing=smoothing)
 

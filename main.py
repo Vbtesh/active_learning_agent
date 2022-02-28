@@ -10,14 +10,15 @@ from classes.internal_states.normative_DIS import Normative_DIS
 
 from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
 from classes.action_states.undiscounted_gain_hard_horizon_TSAS import Undiscounted_gain_hard_horizon_TSAS
-from classes.action_states.experience_3D_AS import Experience_3D_AS
+from classes.action_states.experience_discrete_3D_AS import Experience_discrete_3D_AS
+from classes.action_states.experience_conti_3D_AS import Experience_conti_3D_AS
 
 from classes.sensory_states.omniscient_ST import Omniscient_ST
 
 from classes.agent import Agent
 from classes.experiment import Experiment
 
-from methods.policies import softmax_policy_init, three_d_softmax_policy_init
+from methods.policies import softmax_policy_init, three_d_softmax_policy_init, discrete_policy_init
 from methods.empirical_priors import generate_discrete_empirical_priors, generate_gaussian_empirical_priors
 from methods.action_values_priors import action_values_from_mtv_norm
 
@@ -95,10 +96,10 @@ def main():
     ## Import from behavioural experiment
     gt_behavioural_exp = part_data['ground_truth']
     ## Any model as np.ndarray
-    custom_model = np.array([-1, 0.5, .0, -1, 0, 0])
+    custom_model = np.array([-1, 0, 0, -1, 0, 0])
     ## Final ground truth assignment
     true_model = gt_behavioural_exp
-    #true_model = custom_model
+    true_model = custom_model
 
     # Action parameters
     ## Number of model to sample from the posterior
@@ -114,6 +115,7 @@ def main():
     ## Policy for action selection from action values
     policy_funcs = softmax_policy_init(1) # Returns three function: sample, pmf, params
     policy_funcs_3d = three_d_softmax_policy_init(1)
+    policy_funcs_discrete = discrete_policy_init()
 
     ## Parameters
     epsilon = 1e-2 # Certainty threshold: agent stops intervening after entropy goes below epsilon
@@ -126,13 +128,18 @@ def main():
     ## Special parameters for experience actions states
     max_acting_time = 10
     max_obs_time = 10
-    experience_measure = 'change' # Can be "information" or "change"
+    experience_measure = 'information' # Can be "information" or "change"
 
-    mus = np.array([80, 6, 2])
+    mus = np.array([80, 6, 0])
     cov = np.array([[20**2, 0, 0],
                    [0, 1, 0],
                    [0, 0, 1]])
-    dist, dist_3d, prior_action_values, sample_space = action_values_from_mtv_norm(poss_actions[poss_actions > 0], 
+
+    prior_params = (mus, cov)
+    # Special parameters for computing the learning rate in discrete gaussian action
+    learning_param = 1   
+
+    dist, dist_3d, prior_action_values, sample_space = action_values_from_mtv_norm(poss_actions_abs, 
                                                                                    max_acting_time, 
                                                                                    max_obs_time,
                                                                                    mus, cov)
@@ -149,11 +156,12 @@ def main():
     
     action_state = Discounted_gain_soft_horizon_TSAS(N, K, behaviour, epsilon, poss_actions, action_len, policy_funcs, C, knowledge, discount, horizon)
     action_state = Undiscounted_gain_hard_horizon_TSAS(N, K, behaviour, epsilon, poss_actions, action_len, policy_funcs, C, knowledge, depth)
-    action_state = Experience_3D_AS(N, K, behaviour, epsilon, poss_actions_abs, policy_funcs_3d, dt, max_acting_time, max_obs_time, experience_measure, prior_action_values)
+    action_state = Experience_discrete_3D_AS(N, K, behaviour, epsilon, poss_actions_abs, policy_funcs_3d, dt, max_acting_time, max_obs_time, experience_measure, prior_action_values)
+    action_state = Experience_conti_3D_AS(N, K, behaviour, 0*epsilon, poss_actions_abs, policy_funcs_discrete, dt, max_acting_time, max_obs_time, experience_measure, prior_params, learning_param)
 
     internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
-    internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
-    #internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
+    #internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
+    internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
 
     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 
