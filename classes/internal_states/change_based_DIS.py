@@ -15,7 +15,7 @@ class Change_based_DIS(Discrete_IS):
         self._links_lc_updates = np.tile(links.reshape((links.size, 1)), 3).T
 
 
-    def _update_rule(self, sensory_state, intervention=None):
+    def _update_rule(self, sensory_state, action_state):
         obs = sensory_state.s
 
         # Logic for updating

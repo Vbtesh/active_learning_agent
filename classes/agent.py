@@ -29,26 +29,25 @@ class Agent():
         self._log_likelihood = 0
         self._log_likelihood_history = np.zeros(self._N + 1)
 
-
-        
+  
     # Core methods
     ## Learn
-    def learn(self, external_state, intervention=None):
+    def learn(self, external_state):
         # Observe new external state
         self._sensory_state.observe(external_state, self._internal_state)
 
         # Update internal states
-        self._internal_state.update(self._sensory_state, intervention=intervention)
+        self._internal_state.update(self._sensory_state, self.action_state)
 
         self._n += 1
 
     ## Learn fit 
-    def fit_learn(self, external_state, intervention=None):
+    def fit_learn(self, external_state):
         # Observe new external state
         self._sensory_state.observe(external_state, self._internal_state)
 
         # Update internal states
-        log_prob_judgement = self._internal_state.update(self._sensory_state, intervention=intervention)
+        log_prob_judgement = self._internal_state.update(self._sensory_state, self.action_state)
 
         self._log_likelihood += log_prob_judgement
         self._n += 1

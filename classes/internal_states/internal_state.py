@@ -27,10 +27,11 @@ class Internal_state():
     
     # General update function that all internal state object must satisfy
     ## Parameters can change but there must always be current set of posterior parameters & a history of the parameters at each time step
-    def update(self, sensory_state, intervention=None):
+    def update(self, sensory_state, action_state):
+
         self._posterior_params_history[self._n] = self._posterior_params
 
-        self._posterior_params = self._p_i_g_s_i(sensory_state, intervention, *self._p_i_g_s_i_args)
+        self._posterior_params = self._p_i_g_s_i(sensory_state, action_state, *self._p_i_g_s_i_args)
         
         self._n += 1
         
@@ -140,20 +141,8 @@ class Internal_state():
         return causal_vec
 
 
-class Summary_IS(Internal_state):
-    def __init__(self, N, K, prior_params, links, params, update_func, update_func_args=[], smoothing=0):
-        super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
-
-        self._smoothing_temp = smoothing
-
-    
-
-
-
-
-
 # Internal state using a discrete probability distribution to represent the external states
-class Discrete_omniscient_IS(Internal_state):
+class Discrete_IS(Internal_state):
     def __init__(self, N, K, prior_params, links, dt, theta, sigma, update_func, update_func_args=[], sample_params=True, smoothing=0):
 
         super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
@@ -357,7 +346,7 @@ class Discrete_omniscient_IS(Internal_state):
 
 # Internal state using a continuous probability distribution to represent the external states
 ## Need to be able to express discrete probability values
-class Continuous_omniscient_IS(Internal_state):
+class Continuous_IS(Internal_state):
     def __init__(self, N, K, prior_params, links, dt, update_func, update_func_args=[],  sample_params=True, smoothing=0):
         super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
 

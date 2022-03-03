@@ -39,7 +39,7 @@ class Experiment():
             self.external_state.run(interventions=a)
 
             # Learn from the new state
-            self.agent.fit_learn(self.external_state, intervention=a)
+            self.agent.fit_learn(self.external_state)
 
             if n % 10 == 0 and console:
                 print('Iter:', n, 'Current MAP:', self.agent.internal_state.map, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.internal_state.posterior_entropy)
@@ -65,7 +65,8 @@ class Experiment():
             for n in range(self._N):
                 a = self.agent.act(self.external_state)
                 x = self.external_state.run(interventions=a)
-                self.agent.learn(self.external_state, intervention=a)
+                self.agent.learn(self.external_state)
+                #self.agent.learn(self.external_state, intervention=a)
 
                 #print('Model n:', agent.model._n)
                 #print('external_state n:', external_state._n)

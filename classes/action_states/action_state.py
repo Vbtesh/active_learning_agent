@@ -83,7 +83,7 @@ class Action_state():
             return 0  # Log probability of acting given that the person is an observer is necessarily - infinity
 
         # If action and action fit are different, do not penalise log likelihood
-        if self.a and not self.a_fit:
+        if self.a_real and not self.a_fit:
             self._n += 1
             self._log_likelihood += 0
             self._log_likelihood_history[self._n] = self._log_likelihood
@@ -151,6 +151,10 @@ class Action_state():
 
     @property
     def a(self):
+        return self._current_action
+
+    @property
+    def a_real(self):
         if np.isnan(self._A[self._n]):
             return None
         else: 
@@ -164,6 +168,10 @@ class Action_state():
         else:
             action = int(self._A_fit[self._n])
             return (action, self._X[self._n,:][action])
+    
+    @property
+    def a_len(self):
+        return self._action_len
 
     @property
     def actions(self):
@@ -420,9 +428,6 @@ class Experience_AS(Action_state):
 
         # Variables for action fitting
         self._previous_action = None
-
-        
-        
 
 
     # Action sampling function

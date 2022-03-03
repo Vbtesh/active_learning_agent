@@ -1,12 +1,14 @@
 import numpy as np
 import pandas as pd
 import pickle
+from classes.internal_states.change_based_DIS import Change_based_DIS
 
 from classes.ou_network import OU_Network
 
 from classes.internal_states.lc_omniscient_DIS import Local_computations_omniscient_DIS
 from classes.internal_states.lc_omniscient_CIS import Local_computations_omniscient_CIS
 from classes.internal_states.normative_DIS import Normative_DIS
+from classes.internal_states.change_based_CIS import LC_linear_change_CIS
 
 from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
 from classes.action_states.undiscounted_gain_hard_horizon_TSAS import Undiscounted_gain_hard_horizon_TSAS
@@ -21,7 +23,6 @@ from classes.experiment import Experiment
 from methods.policies import softmax_policy_init, three_d_softmax_policy_init, discrete_policy_init
 from methods.empirical_priors import generate_discrete_empirical_priors, generate_gaussian_empirical_priors
 from methods.action_values_priors import action_values_from_mtv_norm
-
 
 
 def main():
@@ -112,6 +113,14 @@ def main():
 
     ## Define action length (TO BE REFINED FOR FITTING DATA)
     action_len = 5 
+
+    # Change based
+    variance_likelihood = 5e-2
+    prop_constant = dt*theta
+    hypothesis = 'full_knowledge' # can be 'distance', 'cause_value' and 'full_knowledge'
+    decay_type = 'sigmoid' # can be 'exponential' or 'sigmoid'
+    decay_rate = 0.75
+
     ## Policy for action selection from action values
     policy_funcs = softmax_policy_init(1) # Returns three function: sample, pmf, params
     policy_funcs_3d = three_d_softmax_policy_init(1)
@@ -128,7 +137,7 @@ def main():
     ## Special parameters for experience actions states
     max_acting_time = 10
     max_obs_time = 10
-    experience_measure = 'information' # Can be "information" or "change"
+    experience_measure = 'change' # Can be "information" or "change"
 
     mus = np.array([80, 6, 0])
     cov = np.array([[20**2, 0, 0],
@@ -162,6 +171,7 @@ def main():
     internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
     #internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
     internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
+    internal_state = LC_linear_change_CIS(N, K, continuous_empirical_prior, links, dt, prop_constant, variance_likelihood, hypothesis, decay_type, decay_rate, sample_params=False, smoothing=smoothing)
 
     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
 

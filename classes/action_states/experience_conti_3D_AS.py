@@ -79,7 +79,9 @@ class Experience_conti_3D_AS(Experience_AS):
         return self._current_distribution
         
 
+
     # Takes the experience gained and return a learning rate between 0 and 1
+    ## Still needs work. As of right now, it simply learns like a random walk
     def _learning_rate_information(self, information_gained):
         #return self._learning_param * information_gained
         return self._learning_param

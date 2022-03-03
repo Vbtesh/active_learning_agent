@@ -1,9 +1,9 @@
-from classes.internal_states.internal_state import Discrete_omniscient_IS
+from classes.internal_states.internal_state import Discrete_IS
 from scipy import stats
 import numpy as np
 
 # Normative discrete agent
-class Normative_DIS(Discrete_omniscient_IS):
+class Normative_DIS(Discrete_IS):
     def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=False, init_obs=None):
         super().__init__(N, K, prior_params, links, dt, theta, sigma, self._update_rule, sample_params=sample_params, smoothing=smoothing)
 
@@ -21,7 +21,8 @@ class Normative_DIS(Discrete_omniscient_IS):
 
         
     # Update rule
-    def _update_rule(self, sensory_state, intervention=None):
+    def _update_rule(self, sensory_state, action_state):
+        intervention = action_state.a
         obs = sensory_state.s
 
         # Likelihood of observed the new values given the previous values for each model
