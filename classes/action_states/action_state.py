@@ -78,7 +78,7 @@ class Action_state():
             
             # Do not fit actions
             self._n += 1
-            self._log_likelihood -= 0
+            self._log_likelihood += 0
             self._log_likelihood_history[self._n] = self._log_likelihood
             return 0  # Log probability of acting given that the person is an observer is necessarily - infinity
 
@@ -186,7 +186,7 @@ class Action_state():
         if self._constrain_action(action_2) == self._constrain_action(action_1):
             return True
         else:
-            False
+            return False
 
     def _constrain_action(self, action):
         if not action:
@@ -194,7 +194,6 @@ class Action_state():
         else:
             set_value_idx = np.argmin(np.abs(self._poss_actions - action[1]))
             return (action[0], self._poss_actions[set_value_idx])
-
 
 
 # Tree search action selection
@@ -427,6 +426,7 @@ class Experience_AS(Action_state):
         self._last_planned_action = None
 
         # Variables for action fitting
+        self._mean_value_taken = None
         self._previous_action = None
 
 
@@ -440,12 +440,12 @@ class Experience_AS(Action_state):
             if self._action_idx < self._action_len:
 
                 # Sample sign if at least 1 sec has elapsed
-                if self._action_idx % (1/self._dt) == 0:
+                if self._action_idx % (1/self._time_unit) == 0:
                     if self._behaviour == 'random':
                         sign = np.random.choice([-1, 1])
                     else:
-                        p_sign = self._compute_sign_change_prob(sensory_state)
-                        sign = np.random.choice([-1, 1], p=p_sign)
+                        self._prob_sign[self._n, :] = self._compute_sign_change_prob(sensory_state)
+                        sign = np.random.choice([-1, 1], p=self._prob_sign[self._n, :])
 
                     sampled_action = (self._current_action[0], sign*self._current_action[1])
                 else:
@@ -506,8 +506,8 @@ class Experience_AS(Action_state):
                 sampled_action_idx, sampled_length, sampled_obs = sampled_args[0][0], sampled_args[1][0], sampled_args[2][0]
 
                 ## Sample sign
-                p_sign = self._compute_sign_change_prob(sensory_state)
-                sign = np.random.choice([-1, 1], p=p_sign)
+                self._prob_sign[self._n, :] = self._compute_sign_change_prob(sensory_state)
+                sign = np.random.choice([-1, 1], p=self._prob_sign[self._n, :])
 
                 # Combine action
                 sampled_action = (variable, sign*self._poss_actions[sampled_action_idx])
@@ -517,8 +517,8 @@ class Experience_AS(Action_state):
 
 
             # Convert length and obs to datapoint
-            self._action_len = sampled_length / self._dt
-            self._obs_len = sampled_obs / self._dt
+            self._action_len = sampled_length / self._time_unit
+            self._obs_len = sampled_obs / self._time_unit
 
             # Update action len and obs history
             self._last_planned_action = sampled_action
@@ -535,55 +535,110 @@ class Experience_AS(Action_state):
 
 
     # Logic is complex as the likelihood of performing an action has to be computed for the index - action length
+    # Alternative fitting function:
+    # If action, compute prob of value and sign. else return 0.
+    # When intervention is done, compute prob variable and prob action and obs len
+
     # action values update are always with respect to the last action taken, i.e. will always be based on, discounted by the number of step 
     # If no action taken yet, return 0
     # If action taken, but not acting, compute action values, return 0
     # If new action, acting or non acting, return p(new action)
     # If acting, no action, stop acting, compute action values, return 0
 
+
     def _experience_action_fit(self, action, external_state, sensory_state, internal_state):
         if not self._previous_action and not self._current_action:
             # Agent is idle and has not taken any action
             return 0
         elif self._previous_action and not self._current_action:
-            # No acting done here
+            # Start of observation time following action time, no acting done here
             self._acting = False
-            # Observation after action, update action values for previous action
-            self._action_values[self._n] = self._experience_gained_func(self._previous_action, sensory_state, internal_state)
             # Increment observed length
             self._obs_len += 1
             return 0
         elif not self._previous_action and self._current_action:
             # First action is being taken, do nothing until action is completed
             self._acting = True
-            # Set action length to 1
+            
+            # Set up book keeping for values taken and previous action.
+            self._mean_value_taken = np.abs(self._current_action[1])
             self._previous_action = self._current_action
+            # Set action length to 1
             self._action_len = 1
             return 0
         else:
-            # Case where previous and current action are true
-            if self._action_check(self._previous_action, self._current_action):
-                # If both are the same, just increment action length
-                self._action_len += 1
-                return 0
-            else:
-                # Two cases, immediate change or change after obs
-                # Changing action, compute action values
-                self._action_values[self._n] = self._experience_gain_func(self._previous_action, self._action_len, self._obs_len, sensory_state, internal_state)
+            abs_current_action = (np.abs(self._current_action[0]), self._current_action[1])
+            abs_prev_action = (np.abs(self._previous_action[0]), self._previous_action[1])
+            # Cases where previous and current action are true
+            ## If actions are the same, differentiate between pursuing the same action and reselecting it
+            # Two cases
+            # If new intervention: value previous action
+            # Else if same intervention: compute sign prob if action_len % 5 == 0 else return 0
 
-                # Fit variable intervened upon, function of link entropy, higher entropy => higher prob
-                self._prob_variable[self._n, :] = self._compute_variable_prob(internal_state)
-                # Fit sign of intervention value
-                self._prob_sign[self._n, :] = self._compute_sign_change_prob(self._previous_action, self._action_len, self._obs_len, sensory_state)
+            # If last current action is not an action then, we are in a new intervention, otherwise, it is the same intervention
+            if not self._actions_history[self._n-1]:
+                # Get effective previous action: tuple with variable index and absolute mean value taken
+                effective_previous_action = self._constrain_action((self._previous_action[0], self._mean_value_taken))
+                # Changing action, compute action values for previous action
+                action_values = self._experience_gained_func(effective_previous_action, self._action_len, self._obs_len, sensory_state, internal_state)
+                self._action_values[self._n] = action_values 
+
                 # Fit previous action 
-                action_log_prob = self._pmf_policy(self._previous_action, self._action_len, self._obs_len, self._action_values)
+                action_idx = self._flatten_action(effective_previous_action)
+                action_len_sec = int(self._action_len * self._time_unit) # Round to nearest unit
+                obs_len_sec = int(self._obs_len * self._time_unit) # Round to nearest unit
+
+                # Get action probability from policy
+                action_taken = (action_idx, action_len_sec, obs_len_sec)
+                action_prob = self._pmf_policy(action_taken, self._action_values[self._n])
 
                 # Previous action becomes current action, reset counters of length
+                # We start new action here
                 self._previous_action = self._current_action
+                self._mean_value_taken = np.abs(self._current_action[1])
                 self._action_len = 1
                 self._obs_len = 0
+                
+                # Fit variable intervened upon, function of link entropy, higher entropy => higher prob
+                # PROBLEM, THIS NEEDS TO BE FIT FOR CURRENT ACTION -- OK
+                self._prob_variable[self._n, :] = self._compute_variable_prob(internal_state)
+                var_prob = self._prob_variable[self._n, :][self._previous_action[0]]
 
-                return action_log_prob
+                # Fit sign of intervention value
+                # CAREFUL, THIS CAN CHANGE THROUGHOUT THE INTERVENTION AND SHOULD BE COMPUTED FOR EACH SECOND
+                # NOT FOR PREVIOUS ACTION BUT CURRENT ACTION -- OK
+                self._prob_sign[self._n, :] = self._compute_sign_change_prob(sensory_state)
+                sign_prob = self._prob_sign[self._n, 0] if self._previous_action[1] > 0 else self._prob_sign[self._n, 1]
+        
+                # Returned are the log likelihood of taking previous action (value, action len, obs len)
+                # But the log likelihood of picking the new variable and the observed sign
+                full_action_log_prob = np.log(action_prob) + np.log(var_prob) + np.log(sign_prob)
+                return full_action_log_prob[0]
+            
+            # Else if still acting and in the same intervention
+            ## 2 cases:
+            ### 1. Same value: 
+
+            elif self._acting and self._action_len % (1 / self._time_unit) == 0:
+                # If acting and 1 second has passed, compute current action sign prob and return log of prob
+                self._prob_sign[self._n, :] = self._compute_sign_change_prob(sensory_state)
+                sign_prob = self._prob_sign[self._n, 0] if self._current_action[1] > 0 else self._prob_sign[self._n, 1]
+
+                # Increment action len, update mean value
+                self._action_len += 1
+                # The update is simply an arithmetic mean of all values taken expressed as an update and where the learning rate is the action length
+                self._mean_value_taken = self._mean_value_taken + 1/self._action_len * (np.abs(self._current_action[1]) - self._mean_value_taken)
+                return np.log(sign_prob)
+                
+            else:
+                # If still intervening but not changing sign, increment action len, update mean value and return 0
+                self._action_len += 1
+                # The update is simply an arithmetic mean of all values taken expressed as an update and where the learning rate is the action length
+                self._mean_value_taken = self._mean_value_taken + 1/self._action_len * (np.abs(self._current_action[1]) - self._mean_value_taken)
+                return 0
+
+                
+                
 
 
     def _compute_variable_prob(self, internal_state):
@@ -606,6 +661,8 @@ class Experience_AS(Action_state):
 
         abs_change_history = np.abs(sensory_state.obs_alt[:, effect_variables])
 
+        # Large when current change is small compared to historic change
+        # Represents p(change sign)
         p = 1 - np.sum(changes * attention_params) / (np.sum(changes * attention_params) + abs_change_history.mean())
 
         # Standardise it so that first is p-negative and second is p-positive
@@ -616,6 +673,9 @@ class Experience_AS(Action_state):
         
         return p_std
 
+
+    def _flatten_action(self, action):
+        return np.where(self._poss_actions == action[1])[0]
         
 
 

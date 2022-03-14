@@ -46,17 +46,17 @@ class LC_linear_change_CIS(Continuous_IS):
 
     def _update_rule(self, sensory_state, action_state):
         intervention = action_state.a
+        obs = sensory_state.s
+        obs_alt = sensory_state.s_alt 
 
-        if not intervention and not self._last_action:
+        if not intervention and not self._last_action or self._n == 0:
+            self._last_obs = obs
             return self._posterior_params
 
         if intervention and (intervention != self._last_action):
             self._last_action = intervention
             self._last_action_idx = 0
 
-        obs = sensory_state.s
-        obs_alt = sensory_state.s_alt 
-        
         new_params = np.zeros(self._prior_params.shape)
 
         # Logic for updating
@@ -110,10 +110,6 @@ class LC_linear_change_CIS(Continuous_IS):
     
     # Background methods
     # Summary statistics               
-    ## Proportional to distance
-    def _prop_distance(self, change_effect, cause, effect):
-        return self._c * (change_effect / (cause - effect))
-
     ## Proportional to cause value
     def _prop_cause_value(self, change_effect, cause, effect):
         return self._c * change_effect / cause
@@ -121,6 +117,11 @@ class LC_linear_change_CIS(Continuous_IS):
     ## Full knowledge
     def _full_knowledge(self, change_effect, cause, effect):
         return self._c * change_effect / cause + effect / cause
+    
+    ## Proportional to distance
+    ### NOT FUNCTIONAL: Requires additional logic as it fails for negative links
+    def _prop_distance(self, change_effect, cause, effect):
+        return self._c * (change_effect / (cause - effect))
         
 
     # Power update coefficients

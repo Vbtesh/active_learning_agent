@@ -368,12 +368,12 @@ class Continuous_IS(Internal_state):
                 else:
                     self._L[i] = stats.gamma.rvs(100*l, scale=1/100)
 
-            self._interval = np.abs(self._L[0] - self._L[1])
+            self._interval = np.abs(self._L[0] - self._L[1]) / 2
             
         else:
             # Assume perfect knowledge
             self._L = links
-            self._interval = np.abs(self._L[0] - self._L[1])
+            self._interval = np.abs(self._L[0] - self._L[1]) / 2
         
         
         # Build representational spaces
@@ -418,30 +418,30 @@ class Continuous_IS(Internal_state):
             return self._links_to_models(self.posterior) 
     
     @property
-    def posterior_discrete_entropy(self):
+    def posterior_entropy(self):
         return self._entropy(self.posterior_over_links, custom=True)
 
     @property
-    def posterior_discrete_entropy_over_links(self):
+    def posterior_entropy_over_links(self):
         return self._entropy(self.posterior_over_links)
     
     @property
-    def discrete_entropy_history(self):
+    def entropy_history(self):
         entropy_history = np.zeros(len(self._posterior_params_history))
         for i in range(entropy_history.size):
             entropy_history[i] = np.sum(self._entropy(self._posterior_pmf(self._posterior_params_history[i])))  
         return entropy_history
     
     @property
-    def posterior_entropy(self):
+    def posterior_differential_entropy(self):
         return np.sum(self._diff_entropy(self.posterior_params))
 
     @property
-    def posterior_entropy_over_links(self):
+    def posterior_differential_entropy_over_links(self):
         return self._diff_entropy(self.posterior_params)
 
     @property
-    def entropy_history(self):
+    def differential_entropy_history(self):
         entropy_history = np.zeros(len(self._posterior_params_history))
         for i in range(entropy_history.size):
             entropy_history[i] = np.sum(self._diff_entropy(self._posterior_params_history[i]))

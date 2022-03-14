@@ -57,12 +57,12 @@ def three_d_softmax_policy_init(temperature):
         return np.where(action_idx == choice)
 
 
-    def pmf_three_d_softmax_policy(action_v_idx, action_len, action_obs, action_values):
+    def pmf_three_d_softmax_policy(action_taken, action_values):
         dims = action_values.shape
         p = np.exp(temperature * action_values.flatten()) / np.sum(np.exp(temperature * action_values.flatten()))
         p_3d = p.reshape(dims)
 
-        return p_3d[action_v_idx, action_len, action_obs]
+        return p_3d[tuple(action_taken)]
 
     def params_three_d_softmax_policy(action_values):
         dims = action_values.shape
@@ -85,8 +85,9 @@ def discrete_policy_init():
         return np.where(actions == choice)
 
 
-    def pmf_discrete_policy(observation, distribution):
-        return distribution[tuple(observation)]
+    ## WORK HERE
+    def pmf_discrete_policy(action_taken, distribution):
+        return distribution[tuple(action_taken)]
 
 
     def params_discrete_policy(distribution):

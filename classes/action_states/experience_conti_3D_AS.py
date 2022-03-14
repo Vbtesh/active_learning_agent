@@ -27,7 +27,7 @@ class Experience_conti_3D_AS(Experience_AS):
         self._num_actions = self._num_values * self._max_acting_time * self._max_obs_time
 
         # Time unit
-        self._dt = time_unit
+        self._time_unit = time_unit
 
         # Action sample space generation
         self._action_space = self._generate_action_space()
@@ -56,7 +56,7 @@ class Experience_conti_3D_AS(Experience_AS):
         experience_gained = self._compute_experience_gained(action, rollback, sensory_state, internal_state)
         
         # Aggregate action data
-        action_data = np.array([np.abs(action[1]), int(action_len*self._dt), int(action_obs*self._dt)])
+        action_data = np.array([np.abs(action[1]), int(action_len*self._time_unit), int(action_obs*self._time_unit)])
 
         # Learning rates from experience_gained
         learning_rate = self._learning_rate(experience_gained)
@@ -79,12 +79,13 @@ class Experience_conti_3D_AS(Experience_AS):
         return self._current_distribution
         
 
-
     # Takes the experience gained and return a learning rate between 0 and 1
     ## Still needs work. As of right now, it simply learns like a random walk
     def _learning_rate_information(self, information_gained):
         #return self._learning_param * information_gained
-        return self._learning_param
+        #return self._learning_param
+        return information_gained
+
 
     def _learning_rate_change(self, change_observed):
         #return self._learning_param * change_observed / 10
@@ -114,7 +115,7 @@ class Experience_conti_3D_AS(Experience_AS):
         abs_changes = np.abs(changes).mean(axis=1)
 
         # Repeat on one second scale (5)
-        rate = 5
+        rate = 1 / self._time_unit
         seconds = np.arange(abs_changes.size / rate)
         remain = rate - abs_changes.size % rate
         reps = np.repeat(seconds, rate)

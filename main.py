@@ -33,10 +33,10 @@ def main():
 
     part_key = '60bd04a3749e1ca47e54d3e1'
     conditions = ['generic', 'congruent', 'incongruent', 'implausible']
-    cond = conditions[3]
+    cond = conditions[1]
     
     # Model fitting
-    fitting = False # If false, no data will be used 
+    fitting = True # If false, no data will be used 
 
     ## Data from trial
     part_data = modelling_data[part_key]['trials'][cond]
@@ -76,15 +76,17 @@ def main():
                              [0, 0, 1, 0, 0],
                              [0, 0, 1, 0, 0]])
     # Emprical Priors
+    sd_prior = 5e2
     if 'prior' in part_data.keys():
         part_map = part_data['prior'] # Participant's maximum a priori
+        print("Participant's prior model:", part_map)
         temp = 5 # Must be explored further
-        sd = 1e5
+        sd = sd_prior
         discrete_empirical_prior, discrete_prior_entropy = generate_discrete_empirical_priors(part_map, links, temp)
         continuous_empirical_prior, continuous_prior_entropy = generate_gaussian_empirical_priors(part_map, sd)
     else:
         discrete_empirical_prior = random_prior
-        sd = 1e5
+        sd = sd_prior
         continuous_empirical_prior = np.array([[0, 0, 0, 0, 0, 0],
                                                [sd, sd, sd, sd, sd, sd]]).T
 
@@ -100,7 +102,7 @@ def main():
     custom_model = np.array([-1, 0, 0, -1, 0, 0])
     ## Final ground truth assignment
     true_model = gt_behavioural_exp
-    true_model = custom_model
+    #true_model = custom_model
 
     # Action parameters
     ## Number of model to sample from the posterior
@@ -117,7 +119,7 @@ def main():
     # Change based
     variance_likelihood = 5e-2
     prop_constant = dt*theta
-    hypothesis = 'full_knowledge' # can be 'distance', 'cause_value' and 'full_knowledge'
+    hypothesis = 'cause_value' # can be 'distance', 'cause_value' and 'full_knowledge'
     decay_type = 'sigmoid' # can be 'exponential' or 'sigmoid'
     decay_rate = 0.75
 
@@ -135,18 +137,23 @@ def main():
     depth = 1 # Horizon for hard horizon undiscounted gain
 
     ## Special parameters for experience actions states
-    max_acting_time = 10
-    max_obs_time = 10
-    experience_measure = 'change' # Can be "information" or "change"
-
-    mus = np.array([80, 6, 0])
+    time_unit = dt # Can be 1 for frame by frame and dt for second by second
+    # Acting times should be given in seconds
+    # 60 is the max as each trial has 60 seconds
+    max_acting_time = 30 
+    max_obs_time = 30
+    experience_measure = 'information' # Can be "information" or "change"
+    # Continuous Gaussian parameters for the distribution over interventions
+    ## Mus are the means: [value, acting_len, obs_len]
+    ## acting  and obs len should be in frames
+    mus = np.array([80, 6, 2])
     cov = np.array([[20**2, 0, 0],
-                   [0, 1, 0],
-                   [0, 0, 1]])
-
+                   [0, 1**2, 0],
+                   [0, 0, 1**2]])
     prior_params = (mus, cov)
+
     # Special parameters for computing the learning rate in discrete gaussian action
-    learning_param = 1   
+    learning_param = 0  
 
     dist, dist_3d, prior_action_values, sample_space = action_values_from_mtv_norm(poss_actions_abs, 
                                                                                    max_acting_time, 
@@ -158,7 +165,7 @@ def main():
     change = 'raw' # Can be 'normalised', 'relative', 'raw'
     
     ## General behaviour parameter
-    behaviour = 'actor'   # Can be 'obs', 'random' or 'actor'
+    behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
     
 
     sensory_state = Omniscient_ST(N, K, alpha, change)
@@ -170,7 +177,7 @@ def main():
 
     internal_state = Normative_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
     #internal_state = Local_computations_omniscient_DIS(N, K, prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
-    internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
+    #internal_state = Local_computations_omniscient_CIS(N, K, continuous_empirical_prior, links, dt, theta, sigma, sample_params=False, smoothing=smoothing)
     internal_state = LC_linear_change_CIS(N, K, continuous_empirical_prior, links, dt, prop_constant, variance_likelihood, hypothesis, decay_type, decay_rate, sample_params=False, smoothing=smoothing)
 
     external_state = OU_Network(N, K, true_model, theta, dt, sigma)
