@@ -3,6 +3,10 @@ import numpy as np
 
 # Oniscient sensor
 ## Returns extactly the external states
+
+# Free parameter:
+## alpha: change "smoothing" rate, represents the memory of recent change and serves to smooth out one step variance or noise from the data
+
 class Omniscient_ST(Sensory_state):
     def __init__(self, N, K, alpha=0.5, change='relative', value_range=(-100, 100)):
         super().__init__(N, K, self.omniscient_observation)
@@ -13,13 +17,13 @@ class Omniscient_ST(Sensory_state):
         
         if change == 'relative':
             self._change_function = self._relative_change
-            self.alt_range = (-5, 5)
+            self.alt_range = (-5, 5) # Simply for plotting purposes
         elif change == 'normalised':
             self._change_function = self._normalised_change
-            self.alt_range = (value_range[0]/100, value_range[1]/100)
+            self.alt_range = (value_range[0]/100, value_range[1]/100) # Simply for plotting purposes
         else:
             self._change_function = self._raw_change
-            self.alt_range = (value_range[0]/4, value_range[1]/4)
+            self.alt_range = (value_range[0]/4, value_range[1]/4) # Simply for plotting purposes
 
 
     def omniscient_observation(self, external_state, internal_state):

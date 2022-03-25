@@ -48,9 +48,11 @@ class Experiment():
             self._n += 1
 
         if console:
+            print('Iter:', n, 'Current MAP:', self.agent.internal_state.MAP, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.internal_state.posterior_entropy)
             print('True model:', self.external_state.causal_vector, 'Posterior_judgement:', self.agent.internal_state._judgement_final)
-            print('Final posterior \n', self.agent.internal_state.posterior)
+            #print('Final posterior \n', self.agent.internal_state.posterior)
             print('Final log likelihood:', self.agent.log_likelihood)
+            print('Final distance:', np.sum((self.agent.internal_state._judgement_final - self.agent.internal_state.MAP)**2))
 
 
     def run(self, console=True):     

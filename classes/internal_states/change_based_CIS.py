@@ -1,8 +1,13 @@
+from selectors import EpollSelector
 from classes.internal_states.internal_state import Continuous_IS
 from scipy import stats
 import numpy as np
 
 # Change based LC agent, assuming linear relationships between variables
+# Free parameters:
+## c: proportionality constant relating sampled summary stats to link values (optimal should be dt*theta)
+## decay rate: rate at which attention decays (the decay is discounted according to the time unit which can be seconds or frames)
+## sigma: std deviation of the likelihood function (will never change the MAP but will change the entropy, hence big impact on log likelihood)
 
 # Choose update type:
 ## Proportional to change
@@ -37,6 +42,8 @@ class LC_linear_change_CIS(Continuous_IS):
         self._decay_rate = decay_rate
 
         self._last_action = None
+        self._last_action_len = None
+        self._last_instant_action = None
         self._last_obs = np.zeros(self._K)
         self._last_action_idx = 0
 
@@ -45,23 +52,50 @@ class LC_linear_change_CIS(Continuous_IS):
 
 
     def _update_rule(self, sensory_state, action_state):
+        # Get current action from action state
+        ## Beware: if not a_fit but a_real, this can lead to divergence because the model will interpret an intervention as normal data
+        ## Maybe use a_real rather that a_fit
         intervention = action_state.a
+        
+  
         obs = sensory_state.s
         obs_alt = sensory_state.s_alt 
+        last_obs = self._last_obs
 
+        if not intervention and action_state.realised and action_state.a_real:
+            self._last_obs = obs
+            self._last_instant_action = intervention
+            return self._posterior_params
+        
         if not intervention and not self._last_action or self._n == 0:
             self._last_obs = obs
+            self._last_instant_action = intervention
             return self._posterior_params
 
-        if intervention and (intervention != self._last_action):
-            self._last_action = intervention
-            self._last_action_idx = 0
+        if intervention:
+            if not self._last_action:
+                # First action taken
+                self._last_action = intervention
+                if action_state.realised:
+                    self._last_action_len = action_state.a_len_fit
+                else:
+                    self._last_action_len = action_state.a_len
+                self._last_action_idx = 0
+            elif intervention and not self._last_instant_action:
+                # Change action after observing
+                self._last_action = intervention
+                if action_state.realised:
+                    self._last_action_len = action_state.a_len_fit
+                else:
+                    self._last_action_len = action_state.a_len
+                self._last_action_idx = 0
+
 
         new_params = np.zeros(self._prior_params.shape)
 
         # Logic for updating
         # Compute power update coefficient
-        delay = action_state.a_len
+        delay = self._last_action_len
         power_coef = self._power_update_coef(delay)
         self._power_update_coef_history[self._n] = power_coef
 
@@ -83,6 +117,11 @@ class LC_linear_change_CIS(Continuous_IS):
                     
                     # Compute summary stat
                     summary_stat = self._calc_obs_stat(obs_alt[j], self._last_obs[i], self._last_obs[j])
+
+                    #if np.abs(summary_stat) > 8:
+                    #    print('Divergence!')
+                    #    pass
+
                     # Control divergence
                     if np.abs(summary_stat) == np.inf:
                         sd = sd_prev
@@ -103,6 +142,7 @@ class LC_linear_change_CIS(Continuous_IS):
     
         self._last_action_idx += 1
         self._last_obs = obs
+        self._last_instant_action = intervention
 
         return new_params
         
@@ -112,16 +152,25 @@ class LC_linear_change_CIS(Continuous_IS):
     # Summary statistics               
     ## Proportional to cause value
     def _prop_cause_value(self, change_effect, cause, effect):
-        return self._c * change_effect / cause
+        if np.abs(cause) == 0:
+            return np.inf
+        else:
+            return self._c * change_effect / cause
 
     ## Full knowledge
     def _full_knowledge(self, change_effect, cause, effect):
-        return self._c * change_effect / cause + effect / cause
+        if np.abs(cause) == 0:
+            return np.inf
+        else:
+            return self._c * change_effect / cause + effect / cause
     
     ## Proportional to distance
     ### NOT FUNCTIONAL: Requires additional logic as it fails for negative links
     def _prop_distance(self, change_effect, cause, effect):
-        return self._c * (change_effect / (cause - effect))
+        if np.abs(cause - effect) == 0:
+            return np.inf
+        else:
+            return self._c * (change_effect / (cause - effect))
         
 
     # Power update coefficients
@@ -161,7 +210,7 @@ class LC_linear_change_CIS(Continuous_IS):
         sds = params[:, 1].reshape((params.shape[0], 1))
 
         discrete_pmf = stats.norm.cdf(self._L + self._interval, loc=means, scale=sds) - stats.norm.cdf(self._L - self._interval, loc=means, scale=sds)
-        discrete_pmf_norm = discrete_pmf / discrete_pmf.sum(axis=1).reshape((means.shape))
+        discrete_pmf_norm = discrete_pmf / discrete_pmf.sum(axis=1).reshape(means.shape)
 
         return discrete_pmf_norm
 

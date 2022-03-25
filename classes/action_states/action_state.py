@@ -31,6 +31,9 @@ class Action_state():
         # Argument are action as tuple or None, external_state, sensory_state, internal_state
         # Returns a log probability of taking the action
         self._fit_action = fit_action_func
+        # Action len fit
+        self._action_len_fit = None
+        self._len_fit = False
 
         # Action history
         ## Generic list for any action specification (depends on model)
@@ -69,7 +72,16 @@ class Action_state():
         # Constraint actual action
         constrained_action = self._constrain_action(self.a_fit)
         self._current_action = constrained_action
-        
+
+        # Get action len from a_fit by looking ahead in the array
+        # Save it for fitting certain internal states
+        if self.a_fit and not self._len_fit:
+            self._action_len_fit = self._get_action_len_fit(self.a_fit)
+            self._len_fit = True
+        elif not self.a_fit and self._len_fit:
+            self._len_fit = False
+
+          
         if self._behaviour == 'obs':
             # Record action if action was taken
             self._actions_history[self._n] = self._current_action 
@@ -123,6 +135,10 @@ class Action_state():
     def load_action_data(self, actions, actions_fit, variables_values):
         self._A = actions
         self._A_fit = actions_fit
+
+        # Create lists of actions indices for each variables
+        self._A_indices = self._split_action_array()
+        
         self._X = variables_values
 
         self._log_likelihood = 0
@@ -174,12 +190,20 @@ class Action_state():
         return self._action_len
 
     @property
+    def a_len_fit(self):
+        return self._action_len_fit
+
+    @property
     def actions(self):
         return self._A[0:self._n+1]
 
     @property
     def actions_fit(self):
         return self._A_fit[0:self._n+1]
+    
+    @property
+    def realised(self):
+        return self._realised
 
     # Evaluate action similarity
     def _action_check(self, action_1, action_2):
@@ -194,6 +218,25 @@ class Action_state():
         else:
             set_value_idx = np.argmin(np.abs(self._poss_actions - action[1]))
             return (action[0], self._poss_actions[set_value_idx])
+
+    # Methods for properly fitting change based models
+    def _split_action_array(self):
+        action_lists = []
+        for k in range(self._K):
+            action_k_indices = np.where(self._A_fit == k)[0]
+            action_lists.append(self._consecutive(action_k_indices))
+        return action_lists
+
+    # Get length of current action
+    def _get_action_len_fit(self, action):
+        for a in self._A_indices[action[0]]:
+            if self._n in a:
+                return a.size
+
+    # Split array of indices into seperate arrays of consecutives indices (consecutive is specific by the stepsize parameter)
+    def _consecutive(self, data, stepsize=1):
+        return np.split(data, np.where(np.diff(data) != stepsize)[0]+1)
+       
 
 
 # Tree search action selection
@@ -662,14 +705,14 @@ class Experience_AS(Action_state):
         abs_change_history = np.abs(sensory_state.obs_alt[:, effect_variables])
 
         # Large when current change is small compared to historic change
-        # Represents p(change sign)
-        p = 1 - np.sum(changes * attention_params) / (np.sum(changes * attention_params) + abs_change_history.mean())
+        # Represents p(keep sign)
+        p = np.sum(changes * attention_params) / (np.sum(changes * attention_params) + 1e-5* abs_change_history.mean())
 
         # Standardise it so that first is p-negative and second is p-positive
         if self._current_action[1] < 0:
-            p_std = np.array([1-p, p])
-        else:
             p_std = np.array([p, 1-p])
+        else:
+            p_std = np.array([1-p, p])
         
         return p_std
 

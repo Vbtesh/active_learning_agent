@@ -143,7 +143,7 @@ class Internal_state():
 
 # Internal state using a discrete probability distribution to represent the external states
 class Discrete_IS(Internal_state):
-    def __init__(self, N, K, prior_params, links, dt, theta, sigma, update_func, update_func_args=[], sample_params=True, smoothing=0):
+    def __init__(self, N, K, prior_params, links, dt, update_func, update_func_args=[], sample_params=True, smoothing=0):
 
         super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
 
@@ -154,9 +154,6 @@ class Discrete_IS(Internal_state):
         # Sample parameter estimates
         if sample_params:
             # Sample key variables according to Davis, Rehder, Bramley (2018)
-            self._theta = stats.gamma.rvs(100*theta, scale=1/100, size=1)
-            self._sigma = stats.gamma.rvs(100*sigma, scale=1/100, size=1)
-
             self._L = np.zeros(len(links))
             for i, l in enumerate(links):
                 if l < 0:
@@ -167,8 +164,6 @@ class Discrete_IS(Internal_state):
                     self._L[i] = stats.gamma.rvs(100*l, scale=1/100)
         else:
             # Assume perfect knowledge
-            self._theta = theta
-            self._sigma = sigma
             self._L = links
 
         # Build representational spaces
@@ -400,8 +395,13 @@ class Continuous_IS(Internal_state):
         return self._links_to_models(self.posterior) 
 
     @property
-    def MAP(self):
+    def MAP_continuous(self):
         return self._argmax()
+
+    @property
+    def MAP(self):
+        graph_idx = np.argmax(self.posterior_over_models)
+        return self._sample_space[graph_idx]
 
     @property
     def posterior_over_links(self):

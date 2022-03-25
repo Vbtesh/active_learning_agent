@@ -5,7 +5,18 @@ import numpy as np
 # Normative discrete agent
 class Normative_DIS(Discrete_IS):
     def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=False, init_obs=None):
-        super().__init__(N, K, prior_params, links, dt, theta, sigma, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+        super().__init__(N, K, prior_params, links, dt, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+
+        
+        # Sample parameter estimates
+        if sample_params:
+            # Sample key variables according to Davis, Rehder, Bramley (2018)
+            self._theta = stats.gamma.rvs(100*theta, scale=1/100, size=1)
+            self._sigma = stats.gamma.rvs(100*sigma, scale=1/100, size=1)
+        else:
+            # Assume perfect knowledge
+            self._theta = theta
+            self._sigma = sigma  
 
         # Transfrom priors from links to graph representation
         prior = self._links_to_models(prior_params)

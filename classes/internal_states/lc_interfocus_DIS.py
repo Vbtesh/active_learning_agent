@@ -4,9 +4,19 @@ import numpy as np
 
 # Local computation discrete agent
 class Local_computations_interfocus_DIS(Discrete_IS):
-    def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=False):
-        super().__init__(N, K, prior_params, links, dt, theta, sigma, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+    def __init__(self, N, K, prior_params, links, dt, theta, sigma, decay_type, decay_rate, sample_params=True, smoothing=False):
+        super().__init__(N, K, prior_params, links, dt, self._update_rule, sample_params=sample_params, smoothing=smoothing)
 
+                # Sample parameter estimates
+        if sample_params:
+            # Sample key variables according to Davis, Rehder, Bramley (2018)
+            self._theta = stats.gamma.rvs(100*theta, scale=1/100, size=1)
+            self._sigma = stats.gamma.rvs(100*sigma, scale=1/100, size=1)
+        else:
+            # Assume perfect knowledge
+            self._theta = theta
+            self._sigma = sigma  
+        
         self._prior_params = np.log(prior_params)
         self._init_priors()
 
@@ -17,32 +27,75 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         self._mus = self._attractor_mu(np.zeros(self._K))
         self._mus_history = [None for i in range(self._N)]
 
+        if decay_type == 'exponential':
+            self._power_update_coef = self._exponential_decay
+        elif decay_type == 'sigmoid':
+            self._power_update_coef = self._sigmoid_decay
+
+        self._decay_rate = decay_rate
+
+        self._last_action = None
+        self._last_action_len = None
+        self._last_instant_action = None
+
+        self._power_update_coef_history = np.zeros(self._N)
+
         
 
     def _update_rule(self, sensory_state, action_state):
         intervention = action_state.a
-        
-        if not isinstance(intervention, tuple):
-            return np.zeros(self._posterior_params.shape)
-
         obs = sensory_state.s
+        
+        if not intervention and action_state.realised and action_state.a_real:
+            self._last_obs = obs
+            self._last_instant_action = intervention
+            return self._posterior_params
+        
+        if not intervention and not self._last_action or self._n == 0:
+            self._last_obs = obs
+            self._last_instant_action = intervention
+            return self._posterior_params
 
+        if intervention:
+            if not self._last_action:
+                # First action taken
+                self._last_action = intervention
+                if action_state.realised:
+                    self._last_action_len = action_state.a_len_fit
+                else:
+                    self._last_action_len = action_state.a_len
+                self._last_action_idx = 0
+            elif intervention and not self._last_instant_action:
+                # Change action after observing
+                self._last_action = intervention
+                if action_state.realised:
+                    self._last_action_len = action_state.a_len_fit
+                else:
+                    self._last_action_len = action_state.a_len
+                self._last_action_idx = 0
+    
         # Logic for updating
+        # Compute power update coefficient
+        delay = self._last_action_len
+        power_coef = self._power_update_coef(delay)
+        self._power_update_coef_history[self._n] = power_coef
+
         log_likelihood_per_link = np.zeros(self._prior_params.shape)
         idx = 0
         for i in range(self._K):
             for j in range(self._K):
                 if i != j:
-                    if intervention[0] == i:
+                    if j == self._last_action[0] or i != self._last_action[0]:
+                        log_likelihood_per_link[idx, :] = np.zeros(self._L.size)
+                        
+                    else:
                         # Likelihood of observed the new values given the previous values for each model
-                        log_likelihood = stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=self._sigma*np.sqrt(self._dt))
+                        log_likelihood = power_coef * stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=self._sigma*np.sqrt(self._dt))
                         # Normalisation step
                         likelihood_log = log_likelihood - np.amax(log_likelihood)
                         likelihood_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum()
 
                         log_likelihood_per_link[idx, :] = np.log(likelihood_norm)
-                    else:
-                        log_likelihood_per_link[idx, :] = np.zeros(self._L.size)
                     idx += 1
         
         # Posterior params is the log likelihood of each model given the data
@@ -50,10 +103,21 @@ class Local_computations_interfocus_DIS(Discrete_IS):
 
         # update mus
         self._update_mus(obs)
+        self._last_action_idx += 1
+        self._last_instant_action = intervention
 
         return log_posterior
 
     
+    # Power update coefficients
+    ## Exponential decay
+    def _exponential_decay(self, delay):
+        return self._decay_rate**self._last_action_idx
+
+    ## Sigmoid decay
+    def _sigmoid_decay(self, delay):
+        return 1 / (1 + self._decay_rate**(- self._last_action_idx + delay))
+
     # Background methods
     def _update_mus(self, obs):
         self._mus_history[self._n] = self._mus
