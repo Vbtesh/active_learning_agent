@@ -11,7 +11,7 @@ def entropy(distribution):
 
 
 def softmax(d, temp=1):
-    return np.exp(temp*d) / np.exp(temp*d).sum(axis=1).reshape((d.shape[0], 1))
+    return np.exp(d/temp) / np.exp(d/temp).sum(axis=1).reshape((d.shape[0], 1))
 
 
 # Returns the parameters of a discrete empirical prior distribution over links 

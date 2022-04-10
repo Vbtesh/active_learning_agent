@@ -9,22 +9,24 @@ from scipy.stats import distributions
 
 # Main Internal state class
 class Internal_state():
-    def __init__(self, N, K, prior_params, update_func, update_func_args=[]):
+    def __init__(self, N, K, prior_param, update_func, update_func_args=[]):
         self._N = N
         self._n = 0
         self._K = K
 
-        self._prior_params = prior_params
-        self._init_priors()
+        self._prior_param = prior_param # Can either be a temperature parameter if the internal is discrete or a vector of standard deviation if it is continuous
+
+        self._prior_params = None
 
         # p(i_t|s_t, i_t-1): must be a function of sensory states and the last action
         self._p_i_g_s_i = update_func
         self._p_i_g_s_i_args = update_func_args
 
-        self._realised = False
+        # Fitting parameters
+        self._realised = False # True if data already exists
+        self._fitting_judgement = False # True if fitting judgement data
         
 
-    
     # General update function that all internal state object must satisfy
     ## Parameters can change but there must always be current set of posterior parameters & a history of the parameters at each time step
     def update(self, sensory_state, action_state):
@@ -35,43 +37,48 @@ class Internal_state():
         
         self._n += 1
         
+        
         if self._realised:
-            # Update history
-            self._log_likelihood_history[self._n] = self._log_likelihood
+            if self._fitting_judgement:
+                # Update history
+                self._log_likelihood_history[self._n] = self._log_likelihood
 
-            judgement_log_prob = 0
-            j_data = self._judgement_data[self._n-1, :]
+                judgement_log_prob = 0
+                j_data = self._judgement_data[self._n-1, :]
 
-            if np.sum(np.isnan(j_data) != True) > 0:
-                link_idx = np.argmax(np.isnan(j_data) != True)
-                link_value = j_data[link_idx]
+                if np.sum(np.isnan(j_data) != True) > 0:
+                    link_idx = np.argmax(np.isnan(j_data) != True)
+                    link_value = j_data[link_idx]
 
-                judgement_log_prob = self.posterior_PF_link(link_idx, link_value, log=True)
+                    judgement_log_prob = self.posterior_PF_link(link_idx, link_value, log=True)
 
-                self._judgement_current[link_idx] = link_value
+                    self._judgement_current[link_idx] = link_value
 
-            elif self._n == self._N:
-                # Fit final judgement
-                judge_diff = self._judgement_current != self._judgement_final
+                elif self._n == self._N:
+                    # Fit final judgement
+                    judge_diff = self._judgement_current != self._judgement_final
 
-                
-                for i in range(judge_diff.size):
-                    if judge_diff[i]:
-                        link_idx = i
-                        link_value = self._judgement_final[link_idx]
 
-                        judgement_log_prob += self.posterior_PF_link(link_idx, link_value, log=True)
+                    for i in range(judge_diff.size):
+                        if judge_diff[i]:
+                            link_idx = i
+                            link_value = self._judgement_final[link_idx]
 
-                        self._judgement_current[link_idx] = link_value
+                            judgement_log_prob += self.posterior_PF_link(link_idx, link_value, log=True)
 
-                print('Fiiting final judgement:', judgement_log_prob)
+                            self._judgement_current[link_idx] = link_value
 
-            self._log_likelihood += judgement_log_prob
+                    print('Fiiting final judgement:', judgement_log_prob)
 
+                self._log_likelihood += judgement_log_prob
+            else:
+                judgement_log_prob = 0
+                self._log_likelihood += judgement_log_prob
+        
             return judgement_log_prob
         
 
-    def load_judgement_data(self, judgement_data, final_judgement):
+    def load_judgement_data(self, judgement_data, final_judgement, fit_judgement=True):
         self._judgement_data = judgement_data
         self._judgement_final = final_judgement
 
@@ -82,6 +89,7 @@ class Internal_state():
         self._log_likelihood_history = np.zeros(self._N+1)
 
         self._realised = True
+        self._fitting_judgement = fit_judgement
 
     
     # Roll back internal state by a given number of step
@@ -100,10 +108,17 @@ class Internal_state():
                 
 
     # Utility functions
-    def _init_priors(self):
+    def inititialise_prior_distribution(self, prior_judgement=None):
+        self._prior_params = self._generate_prior_from_judgement(prior_judgement, self._prior_param) # Depends on continuous or discrete IS
+        self._local_prior_init() # Model specific transformations of the prior
         self._posterior_params = self._prior_params
         self._posterior_params_history = [None for i in range(self._N)]
         self._posterior_params_history[0] = self._prior_params
+
+        # Compute prior entropy
+        self._prior_entropy = self.posterior_entropy
+        self._prior_entropy_over_link = self.posterior_entropy_over_links
+
 
 
     def _causality_matrix(self, link_vec, fill_diag=1):
@@ -143,9 +158,9 @@ class Internal_state():
 
 # Internal state using a discrete probability distribution to represent the external states
 class Discrete_IS(Internal_state):
-    def __init__(self, N, K, prior_params, links, dt, update_func, update_func_args=[], sample_params=True, smoothing=0):
+    def __init__(self, N, K, links, prior_param, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, smoothing=0):
 
-        super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
+        super().__init__(N, K, prior_param, update_func, update_func_args=update_func_args)
 
         self._num_links = len(links)
         self._dt = dt
@@ -167,11 +182,16 @@ class Discrete_IS(Internal_state):
             self._L = links
 
         # Build representational spaces
-        self._sample_space = self._build_space(links) # Sample space as set of vectors with link values
-        self._indexed_space = self._build_space(np.arange(len(links))).astype(int) # Same as above but link values are indices
-        self._sample_space_as_mat = self._build_space(links, as_matrix=True) # Sample space as a set of causality matrices, i.e. one for each model
-
-        #self.causes_idx = [self._map_cause_to_effect(i, K**2-K) for i in range(K)] # Internal variables for converting from distribution over models to distribution over links
+        ## if generate sample space == True, build sample space, else, wait for call of the add_sample_space method call
+        if generate_sample_space:
+            self._sample_space = self._build_space(links) # Sample space as set of vectors with link values
+            self._indexed_space = self._build_space(np.arange(len(links))).astype(int) # Same as above but link values are indices
+            self._sample_space_as_mat = self._build_space(links, as_matrix=True) # Sample space as a set of causality matrices, i.e. one for each model
+        else:
+            self._sample_space = None
+            self._indexed_space = None
+            self._sample_space_as_mat = None
+        
 
     # Properties
     @property
@@ -210,6 +230,14 @@ class Discrete_IS(Internal_state):
         return self._entropy(self.posterior_over_models)
 
     @property
+    def prior_entropy(self):
+        return self._prior_entropy
+
+    @property
+    def prior_entropy_over_links(self):
+        return self._prior_entropy_links
+
+    @property
     def posterior_entropy_over_links(self):
         return self._entropy(self.posterior_over_links)
     
@@ -217,6 +245,14 @@ class Discrete_IS(Internal_state):
     def entropy_history(self):
         posterior_history = self._likelihood(self._posterior_params_history)
         return self._entropy(posterior_history)
+
+    # Return a posterior over model for the given index between 0 and N
+    def posterior_over_models_byidx(self, idx):
+        posterior = self._likelihood(self._posterior_params_history[idx])
+        if len(self.posterior.shape) == 1:
+            return self._smooth(posterior)
+        else:
+            return self._models_to_links[self._smooth(posterior)]
 
 
     # Samples the posterior, the number of samples is given by the size parameter
@@ -248,6 +284,30 @@ class Discrete_IS(Internal_state):
             log_prob = np.log(self.posterior_over_links[link_idx, value_idx])
             return log_prob
 
+
+    # Prior initialisation
+    def _generate_prior_from_judgement(self, prior_judgement, temperature):
+
+        if type(prior_judgement) == np.ndarray:
+            prior_j = prior_judgement  
+            temp = temperature  
+        else:
+            prior_j = np.zeros(self._K**2 - self._K)
+            temp = 100
+
+        p_unnormalised = np.zeros((prior_j.size, self._L.size))
+        for i in np.arange(prior_j.size):
+            v = prior_j[i]
+            indices = np.arange(self._L.size)
+
+            # Computes an a array with negative absolute distance from the judgement
+            p_unnormalised[i,:] = self._L.size - np.abs(indices - np.argmin(np.abs(self._L - v)))
+
+        # Normalises the exponential of the distance times the temperature parameter
+        p = self._softmax(p_unnormalised, temp)
+
+        # Return the probability distribution and the entropy of the distribution
+        return p
 
     # Background methods for likelihood and sampling for discrete distributions
     def _likelihood(self, log_likelihood):
@@ -314,6 +374,12 @@ class Discrete_IS(Internal_state):
         return links_probs[np.arange(links_probs.shape[0]), self._indexed_space].prod(axis=1)
 
     
+    # Sample space related methods
+    def add_sample_space_env(self, triple_of_spaces):
+        # Add sample space manually
+        self._sample_space, self._indexed_space, self._sample_space_as_mat = triple_of_spaces
+
+
     def _build_space(self, links, as_matrix=False):
         a = links 
         c = len(links)
@@ -338,12 +404,18 @@ class Discrete_IS(Internal_state):
             
             return S_mat
 
+    
+    def softmax(self, d, temp=1):
+        return np.exp(d/temp) / np.exp(d/temp).sum(axis=1).reshape((d.shape[0], 1))
+
+
+
 
 # Internal state using a continuous probability distribution to represent the external states
 ## Need to be able to express discrete probability values
 class Continuous_IS(Internal_state):
-    def __init__(self, N, K, prior_params, links, dt, update_func, update_func_args=[],  sample_params=True, smoothing=0):
-        super().__init__(N, K, prior_params, update_func, update_func_args=update_func_args)
+    def __init__(self, N, K, links, prior_param, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, smoothing=0):
+        super().__init__(N, K, prior_param, update_func, update_func_args=update_func_args)
 
         # Smoothing temperature
         self._smoothing_temp = smoothing
@@ -372,10 +444,15 @@ class Continuous_IS(Internal_state):
         
         
         # Build representational spaces
-        self._sample_space = self._build_space(self._L) # Sample space as set of vectors with link values
-        self._indexed_space = self._build_space(np.arange(len(self._L))).astype(int) # Same as above but link values are indices
-        self._sample_space_as_mat = self._build_space(self._L, as_matrix=True) # Sample space as a set of causality matrices, i.e. one for each model
-
+        ## if generate sample space == True, build sample space, else, wait for call of the add_sample_space method call
+        if generate_sample_space:
+            self._sample_space = self._build_space(links) # Sample space as set of vectors with link values
+            self._indexed_space = self._build_space(np.arange(len(links))).astype(int) # Same as above but link values are indices
+            self._sample_space_as_mat = self._build_space(links, as_matrix=True) # Sample space as a set of causality matrices, i.e. one for each model
+        else:
+            self._sample_space = None
+            self._indexed_space = None
+            self._sample_space_as_mat = None
 
     # Properties
     @property
@@ -416,6 +493,14 @@ class Continuous_IS(Internal_state):
             return self.posterior
         else:
             return self._links_to_models(self.posterior) 
+
+    @property
+    def prior_entropy(self):
+        return self._prior_entropy
+
+    @property
+    def prior_entropy_over_links(self):
+        return self._prior_entropy_links
     
     @property
     def posterior_entropy(self):
@@ -446,6 +531,14 @@ class Continuous_IS(Internal_state):
         for i in range(entropy_history.size):
             entropy_history[i] = np.sum(self._diff_entropy(self._posterior_params_history[i]))
         return entropy_history
+
+
+    # Return a posterior over model for the given index between 0 and N
+    def posterior_over_models_byidx(self, idx):
+        if len(self.posterior.shape) == 1:
+            return self._smooth(self._posterior_pmf(self._posterior_params_history[idx]))
+        else:
+            return self._models_to_links[self._smooth(self._posterior_pmf(self._posterior_params_history[idx]))]
 
 
     # Samples the posterior, the number of samples is given by the size parameter
@@ -480,7 +573,24 @@ class Continuous_IS(Internal_state):
             return np.log(self._link_pdf(link_idx, link_value))
         else:
             return self._link_pdf(link_idx, link_value)
+
         
+    # Prior initialisation
+    def _generate_prior_from_judgement(self, prior_judgement, sigma):
+        if prior_judgement:
+            means = prior_judgement
+            s = sigma
+        else:
+            means = np.zeros(self._K**2 - self._K)
+            s = 1e10
+
+        if type(s) == np.ndarray:
+            sd = s
+        else:
+            sd = s * np.ones(means.shape)
+
+        return np.array([means, sd]).T
+    
 
     def _diff_entropy(self, parameters):
         # Needs to be specifically defined per sub class
@@ -534,6 +644,12 @@ class Continuous_IS(Internal_state):
     def _links_to_models(self, links_probs):
         return links_probs[np.arange(links_probs.shape[0]), self._indexed_space].prod(axis=1)
 
+    
+    # Sample space related methods
+    def add_sample_space_env(self, triple_of_spaces):
+        # Add sample space manually
+        self._sample_space, self._indexed_space, self._sample_space_as_mat = triple_of_spaces
+
     def _build_space(self, links, as_matrix=False):
         a = links 
         c = len(links)
@@ -557,6 +673,9 @@ class Continuous_IS(Internal_state):
                 S_mat[i, :, :] = self._causality_matrix(S[i, :], fill_diag=1)
             
             return S_mat
+
+    def softmax(self, d, temp=1):
+        return np.exp(d/temp) / np.exp(d/temp).sum(axis=1).reshape((d.shape[0], 1))
         
 
 

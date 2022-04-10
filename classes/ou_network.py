@@ -4,15 +4,15 @@ import seaborn as sns
 
 
 class OU_Network():
-    def __init__(self, N, K, true_model, theta, dt, sigma, 
-                                                    init_state=None,
-                                                    range_values=(-100, 100)):
+    def __init__(self, N, K, theta, dt, sigma, ground_truth=None,
+                                               init_state=None,
+                                               range_values=(-100, 100)):
         # Parameters
-        if len(true_model.shape) > 1:
-            self._G = true_model
+        if type(ground_truth) == np.ndarray:
+            self.set_ground_truth(ground_truth)
         else:
-            self._G = self._causality_matrix(true_model, fill_diag=1)
-
+            self._G = None
+        
         self._sig = sigma
         self._dt = dt
         self._theta = theta
@@ -106,6 +106,12 @@ class OU_Network():
 
 
     # Load data
+    def set_ground_truth(self, ground_truth):
+        if len(ground_truth.shape) > 1:
+            self._G = ground_truth
+        else:
+            self._G = self._causality_matrix(ground_truth, fill_diag=1)
+
     def load_trial_data(self, variables_values):
         self._X = variables_values
         self._N = variables_values.shape[0] - 1

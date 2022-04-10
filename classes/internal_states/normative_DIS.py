@@ -4,8 +4,8 @@ import numpy as np
 
 # Normative discrete agent
 class Normative_DIS(Discrete_IS):
-    def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=False, init_obs=None):
-        super().__init__(N, K, prior_params, links, dt, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+    def __init__(self, N, K, links, prior_param, dt, theta, sigma, generate_sample_space=True, sample_params=False, smoothing=False):
+        super().__init__(N, K, links, prior_param, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, smoothing=smoothing)
 
         
         # Sample parameter estimates
@@ -19,14 +19,10 @@ class Normative_DIS(Discrete_IS):
             self._sigma = sigma  
 
         # Transfrom priors from links to graph representation
-        prior = self._links_to_models(prior_params)
-        self._prior_params = np.log(prior)
+        
         self._init_priors()
 
-        if init_obs:
-            self._mus = self._attractor_mu(init_obs)
-        else:
-            self._mus = self._attractor_mu(np.zeros(self._K))
+        self._mus = self._attractor_mu(np.zeros(self._K))
 
         #self._mus_history = [None for i in range(self._N)]
 
@@ -65,6 +61,12 @@ class Normative_DIS(Discrete_IS):
 
 
     # Background methods
+    ## Prior initialisation specific to model:
+    def _local_prior_init(self):
+        prior = self._links_to_models(self._prior_params)
+        self._prior_params = np.log(prior)
+
+    # Update attractors for all models
     def _update_mus(self, obs):
         #self._mus_history[self._n] = self._mus
         self._mus = self._attractor_mu(obs)

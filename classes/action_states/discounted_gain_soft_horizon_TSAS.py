@@ -9,7 +9,7 @@ class Discounted_gain_soft_horizon_TSAS(Treesearch_AS):
 
         super().__init__(N, K, behaviour, epsilon, possible_actions, action_len, policy_funcs, C, knowledge, self._build_tree_dgsh, tree_search_func_args=[discount, horizon])
 
-    
+
     def _build_tree_dgsh(self, gain, external_state, sensory_state, internal_state, gain_update_rule, discount, horizon, depth=0, seq=''):
         if depth > 0 and gain * discount**depth < horizon:
             return gain, seq

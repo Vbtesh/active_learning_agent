@@ -4,8 +4,8 @@ import numpy as np
 
 # Local computation discrete agent
 class Local_computations_interfocus_DIS(Discrete_IS):
-    def __init__(self, N, K, prior_params, links, dt, theta, sigma, decay_type, decay_rate, sample_params=True, smoothing=False):
-        super().__init__(N, K, prior_params, links, dt, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+    def __init__(self, N, K, links, prior_param, dt, theta, sigma, decay_type, decay_rate, generate_sample_space=True, sample_params=False, smoothing=False):
+        super().__init__(N, K, links, prior_param, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, smoothing=smoothing)
 
                 # Sample parameter estimates
         if sample_params:
@@ -17,8 +17,7 @@ class Local_computations_interfocus_DIS(Discrete_IS):
             self._theta = theta
             self._sigma = sigma  
         
-        self._prior_params = np.log(prior_params)
-        self._init_priors()
+        self._prior_param = prior_param
 
         # Special parameters for faster computations
         self._links_lc_updates = np.tile(links.reshape((links.size, 1)), 3).T
@@ -80,7 +79,7 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         power_coef = self._power_update_coef(delay)
         self._power_update_coef_history[self._n] = power_coef
 
-        log_likelihood_per_link = np.zeros(self._prior_params.shape)
+        log_likelihood_per_link = np.zeros(self._posterior_params.shape)
         idx = 0
         for i in range(self._K):
             for j in range(self._K):
@@ -109,6 +108,11 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         return log_posterior
 
     
+    # Background methods
+    ## Prior initialisation specific to model:
+    def _local_prior_init(self):
+        self._prior_params = np.log(self._prior_params)
+
     # Power update coefficients
     ## Exponential decay
     def _exponential_decay(self, delay):

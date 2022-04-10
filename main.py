@@ -34,7 +34,7 @@ def main():
 
     part_key = '5fb91837b8c8756d924f7351'
     conditions = ['generic', 'congruent', 'incongruent', 'implausible']
-    cond = conditions[2]
+    cond = conditions[3]
     
     # Model fitting
     fitting = True # If false, no data will be used 

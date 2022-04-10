@@ -14,12 +14,15 @@ class Experiment():
         self._n = 0
         self._iter = num_exp
         self._i = 0
+        
+        if not agent._multi_is:
+            self._entropy_history = np.zeros((self._iter, self.agent.self._N))
+        else:
+            self._entropy_history = np.zeros((self._iter, agent._multi_is, self.agent.self._N))
 
-        self._entropy_history = np.zeros((self._iter, self._N))
 
-
-    def fit(self, console=True):
-        if not self.external_state._realised:
+    def fit(self, console=False):
+        if not self.external_state._realised and self.agent.realised:
             print('Cannot fit, no loaded data, use Experiment.run instead. Exiting...')
             return
 
@@ -43,19 +46,19 @@ class Experiment():
             self.agent.fit_learn(self.external_state)
 
             if n % 10 == 0 and console:
-                print('Iter:', n, 'Current MAP:', self.agent.internal_state.MAP, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.internal_state.posterior_entropy)
+                print('Iter:', n, 'Current MAP:', self.agent.MAP, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.posterior_entropy)
 
             self._n += 1
 
         if console:
-            print('Iter:', n, 'Current MAP:', self.agent.internal_state.MAP, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.internal_state.posterior_entropy)
-            print('True model:', self.external_state.causal_vector, 'Posterior_judgement:', self.agent.internal_state._judgement_final)
-            #print('Final posterior \n', self.agent.internal_state.posterior)
-            print('Final log likelihood:', self.agent.log_likelihood)
-            print('Final distance:', np.sum((self.agent.internal_state._judgement_final - self.agent.internal_state.MAP)**2))
+            print('Iter:', n, 'Current MAP:', self.agent.MAP, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.posterior_entropy)
+            if self.agent.fitting_judgement:
+                print('True model:', self.external_state.causal_vector, 'Posterior_judgement:', self.agent.final_judgement)
+                print('Final log likelihood:', self.agent.log_likelihood)
+            print('Final distance:', np.sum((self.agent.final_judgement - self.agent.MAP)**2)**(-1/2))
 
 
-    def run(self, console=True):     
+    def run(self, console=False):     
         self._i = 0
 
         for i in range(self._iter):
@@ -78,7 +81,7 @@ class Experiment():
 
                 if n % 10 == 0 and console:
                     print('Iter:', n)
-                    print('Current MAP:', self.agent.internal_state.MAP, 'Entropy:', self.agent.internal_state.posterior_entropy)
+                    print('Current MAP:', self.agent.MAP, 'Entropy:', self.agent.posterior_entropy)
                     #print('Current posterior:')
                     #print(np.around(agent.model.posterior_links, 2))
 
@@ -87,9 +90,12 @@ class Experiment():
 
             if console:
                 print('Iter:', n)
-                print('True model:', self.external_state.causal_vector, 'Final MAP:', self.agent.internal_state.MAP)
+                print('True model:', self.external_state.causal_vector, 'Final MAP:', self.agent.MAP)
 
-            self._entropy_history[i, :] = self.agent.internal_state.entropy_history
+            if self.agent._multi_is:
+                self._entropy_history[i, :, :] = self.agent.entropy_history
+            else:
+                self._entropy_history[i, :] = self.agent.entropy_history
             self._i += 1
 
             
@@ -103,22 +109,23 @@ class Experiment():
             plt.subplot(2, 2, 1)
             self.external_state.plot_network()
             plt.subplot(2, 2, 2)
-            self.agent.plot_entropy_history()
-            plt.subplot(2, 2, 3)
             self.agent.plot_perceptions()
+            if not self.agent._multi_is:
+                plt.subplot(2, 2, 3)
+                self.agent.plot_entropy_history()
             if self.agent.sensory_state._obs_alt_record:
                 plt.subplot(2, 2, 4)
                 self.agent.plot_alt_perceptions()
 
             print('True model:', self.external_state.causal_vector)
-            print('Final MAP:', self.agent.internal_state.MAP)
-            if self.external_state._realised:
-                print('Posterior judgement:', self.agent.internal_state._judgement_final)
+            print('Final MAP:', self.agent.MAP)
+            if self.agent.realised:
+                print('Posterior judgement:', self.agent.final_judgement)
 
         else:
             palette = sns.color_palette("husl", 8)
             for i in range(self._iter):
-                sns.lineplot(self._entropy_hist[i,:], palette=palette)
+                sns.lineplot(self._entropy_history[i,:], palette=palette)
 
 
     def change_report(self):

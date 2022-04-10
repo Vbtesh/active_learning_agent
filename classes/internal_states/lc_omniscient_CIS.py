@@ -6,8 +6,8 @@ import numpy as np
 
 # Local computations continuous agent
 class Local_computations_omniscient_CIS(Continuous_IS):
-    def __init__(self, N, K, prior_params, links, dt, theta, sigma, sample_params=True, smoothing=0, init_obs=None):
-        super().__init__(N, K, prior_params, links, dt, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+    def __init__(self, N, K, links, prior_param, dt, theta, sigma, generate_sample_space=True, sample_params=False, smoothing=0):
+        super().__init__(N, K, links, prior_param, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, smoothing=smoothing)
 
         # Sample parameter estimates
         if sample_params:
@@ -19,20 +19,16 @@ class Local_computations_omniscient_CIS(Continuous_IS):
             self._theta = theta
             self._sigma = sigma  
 
-        self._prior_params = prior_params
-        self._init_priors()
+        self._prior_param = prior_param
 
-        if init_obs:
-            self._last_obs = init_obs
-        else:
-            self._last_obs = np.zeros(self._K)
+        self._last_obs = np.zeros(self._K)
 
 
     def _update_rule(self, sensory_state, action_state):
         intervention = action_state.a
         obs = sensory_state.s
 
-        new_params = np.zeros(self._prior_params.shape)
+        new_params = np.zeros(self._posterior_params.shape)
 
         mu_self = self._last_obs * (1 - np.abs(self._last_obs) / 100)
 
@@ -61,7 +57,10 @@ class Local_computations_omniscient_CIS(Continuous_IS):
 
         return new_params
 
-    
+    ## Prior initialisation specific to model:
+    def _local_prior_init(self):
+        pass
+
     def _argmax(self):
         return np.round(self._posterior_params[:, 0], 2)
 

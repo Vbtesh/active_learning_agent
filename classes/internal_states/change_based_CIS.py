@@ -18,14 +18,11 @@ import numpy as np
 ## Sigmoid
 
 class LC_linear_change_CIS(Continuous_IS):
-    def __init__(self, N, K, prior_params, links, dt, prop_const, variance, hypothesis, decay_type, decay_rate, sample_params=True, smoothing=False):
-        super().__init__(N, K, prior_params, links, dt, self._update_rule, sample_params=sample_params, smoothing=smoothing)
+    def __init__(self, N, K, links, prior_param, dt, prop_const, variance, hypothesis, decay_type, decay_rate, generate_sample_space=True, sample_params=False, smoothing=False):
+        super().__init__(N, K, links, prior_param, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, smoothing=smoothing)
 
         self._c = 1 / prop_const
         self._sigma = variance**(1/2)
-
-        self._prior_params = prior_params
-        self._init_priors()
 
         if hypothesis == 'distance':
             self._calc_obs_stat = self._prop_distance
@@ -47,7 +44,6 @@ class LC_linear_change_CIS(Continuous_IS):
         self._last_obs = np.zeros(self._K)
         self._last_action_idx = 0
 
-        self._summary_stats_history = np.zeros((self._prior_params.shape[0], self._N))
         self._power_update_coef_history = np.zeros(self._N)
 
 
@@ -91,7 +87,7 @@ class LC_linear_change_CIS(Continuous_IS):
                 self._last_action_idx = 0
 
 
-        new_params = np.zeros(self._prior_params.shape)
+        new_params = np.zeros(self._posterior_params.shape)
 
         # Logic for updating
         # Compute power update coefficient
@@ -149,6 +145,10 @@ class LC_linear_change_CIS(Continuous_IS):
 
     
     # Background methods
+    ## Prior initialisation specific to model:
+    def _local_prior_init(self):
+        self._summary_stats_history = np.zeros((self._prior_params.shape[0], self._N))
+
     # Summary statistics               
     ## Proportional to cause value
     def _prop_cause_value(self, change_effect, cause, effect):

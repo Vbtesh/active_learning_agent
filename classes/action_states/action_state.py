@@ -1,5 +1,6 @@
 import numpy as np
 import jax
+from copy import deepcopy
 from numpy.random.mtrand import uniform
 
 
@@ -288,7 +289,10 @@ class Treesearch_AS(Action_state):
                 return self._remap_action(np.random.choice(self._num_actions))
 
             # Compute action values
-            action_values = self._tree_search_action_values(external_state, sensory_state, internal_state) 
+            ## /!\ Deepcopies are important to not break the main state objects /!\
+            action_values = self._tree_search_action_values(deepcopy(external_state), 
+                                                            deepcopy(sensory_state), 
+                                                            deepcopy(internal_state))
 
             # Sample a sequence of actions
             sampled_action = self._policy(action_values)
@@ -314,7 +318,10 @@ class Treesearch_AS(Action_state):
         flat_action = self._flatten_action(action)
 
         # Compute action values
-        action_values = self._tree_search_action_values(external_state, sensory_state, internal_state) 
+        ## /!\ Deepcopies are important to not break the main state objects /!\
+        action_values = self._tree_search_action_values(deepcopy(external_state), 
+                                                        deepcopy(sensory_state), 
+                                                        deepcopy(internal_state))
 
         # Compute policy params
         action_prob = self._pmf_policy(flat_action, action_values)

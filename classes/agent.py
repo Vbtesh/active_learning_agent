@@ -3,7 +3,7 @@ from os import name
 import numpy as np
 import matplotlib.pyplot as plt 
 import seaborn as sns
-from copy import deepcopy
+
 
 
 class Agent():
@@ -24,10 +24,30 @@ class Agent():
 
         # Internal states: must be an Internal_state object
         self._internal_state = internal_state
+        self.realised = False
+        self.fitting_judgement = False
+        if isinstance(internal_state, list):
+            self._multi_is = len(internal_state)
 
-        # Log likelihood
-        self._log_likelihood = 0
-        self._log_likelihood_history = np.zeros(self._N + 1)
+            # Log likelihood
+            self._log_likelihood = np.zeros(self._multi_is)
+            self._log_likelihood_history = np.zeros((self._N + 1, self._multi_is))
+
+            if internal_state[0]._realised:
+                self.realised = True
+            if internal_state[0]._fitting_judgement:
+                self.fitting_judgement = True
+        else:
+            self._multi_is = 0
+
+            # Log likelihood
+            self._log_likelihood = 0
+            self._log_likelihood_history = np.zeros(self._N + 1)
+
+            if internal_state._realised:
+                self.realised = True
+            if internal_state._fitting_judgement:
+                self.fitting_judgement = True
 
   
     # Core methods
@@ -37,7 +57,11 @@ class Agent():
         self._sensory_state.observe(external_state, self._internal_state)
 
         # Update internal states
-        self._internal_state.update(self._sensory_state, self.action_state)
+        if self._multi_is:
+            for is_idx in range(self._multi_is):
+                self._internal_state[is_idx].update(self._sensory_state, self.action_state)
+        else:
+            self._internal_state.update(self._sensory_state, self.action_state)
 
         self._n += 1
 
@@ -47,28 +71,40 @@ class Agent():
         self._sensory_state.observe(external_state, self._internal_state)
 
         # Update internal states
-        log_prob_judgement = self._internal_state.update(self._sensory_state, self.action_state)
+        # Update internal states
+        if self._multi_is:
+            for is_idx in range(self._multi_is):
+                log_prob_judgement = self._internal_state[is_idx].update(self._sensory_state, self.action_state)
+                self._log_likelihood[is_idx] += log_prob_judgement
 
-        self._log_likelihood += log_prob_judgement
+            # Save LL history
+            self._log_likelihood_history[self._n, :] = self._log_likelihood
+        else:
+            log_prob_judgement = self._internal_state.update(self._sensory_state, self.action_state)
+            self._log_likelihood += log_prob_judgement
+
+            # Save LL  history
+            self._log_likelihood_history[self._n] = self._log_likelihood
+
+
         self._n += 1
 
     ## Act by sampling an action
     def act(self, external_state):
         # Sample new action
-        action = self._action_state.sample(deepcopy(external_state), 
-                                           deepcopy(self._sensory_state), 
-                                           deepcopy(self._internal_state))
+        action = self._action_state.sample(external_state, 
+                                           self._sensory_state, 
+                                           self._internal_state)
 
         return action
 
     # Fit action
     def fit_action(self, external_state):
 
-        log_prob_action = self._action_state.fit(deepcopy(external_state), 
-                                                 deepcopy(self._sensory_state), 
-                                                 deepcopy(self._internal_state))
+        log_prob_action = self._action_state.fit(external_state, 
+                                                 self._sensory_state, 
+                                                 self._internal_state)
 
-        self._log_likelihood_history[self._n] = self._log_likelihood
         self._log_likelihood += log_prob_action
         return log_prob_action
 
@@ -109,6 +145,39 @@ class Agent():
     @property
     def log_likelihood(self):
         return self._log_likelihood
+
+    @property
+    def MAP(self):
+        if self._multi_is:
+            MAP = [IS.MAP for IS in self._internal_state]
+            return MAP
+        else:
+            return self._internal_state.MAP
+
+    @property
+    def posterior_entropy(self):
+        if self._multi_is:
+            posterior_entropies = [IS.posterior_entropy for IS in self._internal_state]
+            return posterior_entropies
+        else:
+            return self._internal_state.posterior_entropy
+
+    @property
+    def entropy_history(self):
+        if self._multi_is:
+            entropy_history = [IS.entropy_history for IS in self._internal_state]
+            return np.array(entropy_history)
+        else:
+            return self._internal_state.entropy_history
+
+    @property
+    def final_judgement(self):
+        if not self.realised:
+            return None
+        elif self._multi_is:
+            return self._internal_state[0]._judgement_final
+        else:
+            return self._internal_state._judgement_final
 
 
     # Reports
@@ -159,9 +228,10 @@ class Agent():
         plt.ylim(data_obs_alt.min(),data_obs_alt.max())
 
     def plot_entropy_history(self, colour='blue'):
-        entropy = self.internal_state.entropy_history
-        ax = sns.lineplot(data=entropy[0:self._n+1], lw=1.5, palette=[colour]) # Plot data
-        plt.title('Entropy evolution')
+        if not self._multi_is:
+            entropy = self.internal_state.entropy_history
+            ax = sns.lineplot(data=entropy[0:self._n+1], lw=1.5, palette=[colour]) # Plot data
+            plt.title('Entropy evolution')
 
     def plot_posterior(self):
         posterior = self.internal_state.posterior_over_models
