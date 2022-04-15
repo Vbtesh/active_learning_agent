@@ -97,7 +97,7 @@ class Internal_state():
     def rollback(self, back=np.Inf):
         if back > self._N or back > self._n:
             self._n = 0
-            self._init_priors()
+            self._reset_priors()
         else:
             self._n -= back
 
@@ -108,7 +108,7 @@ class Internal_state():
                 
 
     # Utility functions
-    def inititialise_prior_distribution(self, prior_judgement=None):
+    def initialise_prior_distribution(self, prior_judgement=None):
         self._prior_params = self._generate_prior_from_judgement(prior_judgement, self._prior_param) # Depends on continuous or discrete IS
         self._local_prior_init() # Model specific transformations of the prior
         self._posterior_params = self._prior_params
@@ -119,6 +119,12 @@ class Internal_state():
         self._prior_entropy = self.posterior_entropy
         self._prior_entropy_over_link = self.posterior_entropy_over_links
 
+    
+    def _reset_prior(self):
+        # Simply reset priors to intial states
+        self._posterior_params = self._prior_params
+        self._posterior_params_history = [None for i in range(self._N)]
+        self._posterior_params_history[0] = self._prior_params
 
 
     def _causality_matrix(self, link_vec, fill_diag=1):
@@ -252,7 +258,7 @@ class Discrete_IS(Internal_state):
         if len(self.posterior.shape) == 1:
             return self._smooth(posterior)
         else:
-            return self._models_to_links[self._smooth(posterior)]
+            return self._links_to_models(self._smooth(posterior))
 
 
     # Samples the posterior, the number of samples is given by the size parameter
@@ -327,7 +333,7 @@ class Discrete_IS(Internal_state):
     
 
     def _smooth(self, dist):
-        if self._smoothing_temp == 0:
+        if self._smoothing_temp == None:
             return dist
         
         if len(dist.shape) == 1:
@@ -405,7 +411,7 @@ class Discrete_IS(Internal_state):
             return S_mat
 
     
-    def softmax(self, d, temp=1):
+    def _softmax(self, d, temp=1):
         return np.exp(d/temp) / np.exp(d/temp).sum(axis=1).reshape((d.shape[0], 1))
 
 
@@ -538,7 +544,7 @@ class Continuous_IS(Internal_state):
         if len(self.posterior.shape) == 1:
             return self._smooth(self._posterior_pmf(self._posterior_params_history[idx]))
         else:
-            return self._models_to_links[self._smooth(self._posterior_pmf(self._posterior_params_history[idx]))]
+            return self._links_to_models(self._smooth(self._posterior_pmf(self._posterior_params_history[idx])))
 
 
     # Samples the posterior, the number of samples is given by the size parameter
@@ -610,7 +616,7 @@ class Continuous_IS(Internal_state):
 
     
     def _smooth(self, dist):
-        if self._smoothing_temp == 0:
+        if self._smoothing_temp == None:
             return dist
         
         if len(dist.shape) == 1:

@@ -4,7 +4,7 @@ def build_space_env(K, links):
     links_indexed = np.arange(links.size)
 
     main_space = build_space(K, links)
-    indexed_space = build_space(K, links_indexed)
+    indexed_space = build_space(K, links_indexed).astype(int)
     matrix_space = build_space(K, links, as_matrix=True)
 
     return main_space, indexed_space, matrix_space

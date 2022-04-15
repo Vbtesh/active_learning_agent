@@ -18,13 +18,6 @@ class Normative_DIS(Discrete_IS):
             self._theta = theta
             self._sigma = sigma  
 
-        # Transfrom priors from links to graph representation
-        
-        self._init_priors()
-
-        self._mus = self._attractor_mu(np.zeros(self._K))
-
-        #self._mus_history = [None for i in range(self._N)]
 
         
     # Update rule
@@ -65,6 +58,8 @@ class Normative_DIS(Discrete_IS):
     def _local_prior_init(self):
         prior = self._links_to_models(self._prior_params)
         self._prior_params = np.log(prior)
+        # Compute initial attractor
+        self._mus = self._attractor_mu(np.zeros(self._K))
 
     # Update attractors for all models
     def _update_mus(self, obs):

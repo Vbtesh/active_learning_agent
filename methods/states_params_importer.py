@@ -58,7 +58,7 @@ ground_truth = np.zeros(K**2 - K)  # Ground truth model generating the data: /!\
 # INTERNAL STATE parameters
 L = np.array([-1, -1/2, 0, 1/2, 1]) # Possible link values
 prior_param = 1 # Priors param: temperature for discrete and variance form continuous /!\ Depends on the trial /!\
-beta = 1 # Temperature for the softmax smothing function, will be fitted
+beta = None # Temperature for the softmax smothing function, will be fitted
 
 ## Attention based internal states
 decay_rate = 0.65 # Discount rate of attention 
@@ -70,11 +70,11 @@ decay_type = 'sigmoid' # Functional form of attention parameter: 'exponential' o
 ## Change based internal states
 prop_constant = theta*dt
 samples_variance = 1e-1 # Variance of the likelihood of the links samples
-hypothesis = 'cause_value' # can be 'distance', 'cause_value' and 'full_knowledge'
+hypothesis = 'full_knowledge' # can be 'distance', 'cause_value' and 'full_knowledge'
 
 
 # SENSORY STATES parameters
-change_memory = 1/3 # 1 means no smoothing, just look at raw change
+change_memory = 2/3 # 1 means no smoothing, just look at raw change
 change_type = 'raw' # Can be 'normalised', 'relative', 'raw'
 
 
@@ -109,7 +109,7 @@ max_acting_time = 30 # Maximum acting time in seconds
 max_obs_time = 30 # Maximum observing time in seconds
 experience_measure = 'information' # Can be "information" or "change"
 ### Action selection policy
-discrete_policy_funcs = discrete_policy_init
+discrete_policy_funcs = discrete_policy_init()
 
 # All but trial dependent stuff: Number of datapoint, Number of variables
 def import_params_asdict():

@@ -107,7 +107,7 @@ class LC_linear_change_DIS(Discrete_IS):
                     # Compute summary stat
                     summary_stat = self._calc_obs_stat(obs_alt[j], self._last_obs[i], self._last_obs[j])
                         
-                    # Control divergence
+                    # Control divergence and weird interventions
                     if np.abs(summary_stat) == np.inf:
                         log_likelihood_per_link[idx, :] = np.zeros(self._L.size)
                         idx += 1
@@ -150,6 +150,9 @@ class LC_linear_change_DIS(Discrete_IS):
 
     ## Full knowledge
     def _full_knowledge(self, change_effect, cause, effect):
+        if np.abs(cause) == 0 or np.abs(change_effect) > 20:
+            return np.inf
+
         return self._c * change_effect / cause + effect / cause
     
     ## Proportional to distance

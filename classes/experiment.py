@@ -16,34 +16,36 @@ class Experiment():
         self._i = 0
         
         if not agent._multi_is:
-            self._entropy_history = np.zeros((self._iter, self.agent.self._N))
+            self._entropy_history = np.zeros((self._iter, self.agent._N))
         else:
-            self._entropy_history = np.zeros((self._iter, agent._multi_is, self.agent.self._N))
+            self._entropy_history = np.zeros((self._iter, agent._multi_is, self.agent._N))
 
 
-    def fit(self, console=False):
+    def fit(self, console=False, reset=False):
         if not self.external_state._realised and self.agent.realised:
             print('Cannot fit, no loaded data, use Experiment.run instead. Exiting...')
             return
 
         if console:
             print('True model:', self.external_state.causal_vector) 
-        self.agent.reset()
-        self.external_state.reset()
+        if reset:
+            self.agent.reset()
+            self.external_state.reset()
         self._n = 0
 
         for n in range(self._N):
             # Collect action and action to fit
             a = self.agent.a
 
-            # Fit action to fit
-            self.agent.fit_action(self.external_state)
-
             # Update external state using action
             self.external_state.run(interventions=a)
 
             # Learn from the new state
             self.agent.fit_learn(self.external_state)
+
+            # Fit action to agent's action state
+            ## Done after as this will define the next action sampled
+            self.agent.fit_action(self.external_state)
 
             if n % 10 == 0 and console:
                 print('Iter:', n, 'Current MAP:', self.agent.MAP, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.posterior_entropy)
@@ -58,7 +60,7 @@ class Experiment():
             print('Final distance:', np.sum((self.agent.final_judgement - self.agent.MAP)**2)**(-1/2))
 
 
-    def run(self, console=False):     
+    def run(self, console=False, reset=False):     
         self._i = 0
 
         for i in range(self._iter):
@@ -66,8 +68,10 @@ class Experiment():
                 print('True model:', self.external_state.causal_vector) 
                 print(f'\n Realisation {i+1} out of {self._iter}: \n')
 
-            self.agent.reset()
-            self.external_state.reset()
+            if reset:
+                self.agent.reset()
+                self.external_state.reset()
+
             self._n = 0
 
             for n in range(self._N):
