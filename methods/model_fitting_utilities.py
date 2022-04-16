@@ -337,12 +337,16 @@ def extract_final_judgements(data_dict):      # Dict of data for each participan
 
 
 ## Softmax temperature log likelihood
-def softmax_neg_log_likelihood(temp, dataset, selection):
+def softmax_neg_log_likelihood(temp, dataset, selection, return_selection=False):
     softmax_unnorm = np.exp(dataset * temp)
     softmax = softmax_unnorm / softmax_unnorm.sum(axis=0).reshape((1, dataset.shape[1]))
 
     judgements_likelihood = softmax[selection]
 
-    log_likelihood = np.log(judgements_likelihood).sum()
-    return - log_likelihood
+    log_likelihood = np.log(judgements_likelihood)
+    
+    if return_selection:
+        return - log_likelihood
+    else:
+        return - log_likelihood.sum()
 
