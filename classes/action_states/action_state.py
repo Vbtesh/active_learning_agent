@@ -35,6 +35,8 @@ class Action_state():
         # Action len fit
         self._action_len_fit = None
         self._len_fit = False
+        self._action_len_real = None
+        self._len_real = False
 
         # Action history
         ## Generic list for any action specification (depends on model)
@@ -76,11 +78,11 @@ class Action_state():
 
         # Get action len from a_fit by looking ahead in the array
         # Save it for fitting certain internal states
-        if self.a_fit and not self._len_fit:
-            self._action_len_fit = self._get_action_len_fit(self.a_fit)
-            self._len_fit = True
-        elif not self.a_fit and self._len_fit:
-            self._len_fit = False
+        if self.a_real and not self._len_real:
+            self._action_len_real = self._get_action_len(self.a_real)
+            self._len_real = True
+        elif not self.a_real and self._len_real:
+            self._len_real = False
 
           
         if self._behaviour == 'obs':
@@ -138,7 +140,8 @@ class Action_state():
         self._A_fit = actions_fit
 
         # Create lists of actions indices for each variables
-        self._A_indices = self._split_action_array()
+        self._A_fit_indices = self._split_action_array(self._A_fit)
+        self._A_real_indices = self._split_action_array(self._A)
         
         self._X = variables_values
 
@@ -192,7 +195,11 @@ class Action_state():
 
     @property
     def a_len_fit(self):
-        return self._action_len_fit
+        return self._get_action_len(self.a_fit)
+    
+    @property
+    def a_len_real(self):
+        return self._get_action_len(self.a_real)
 
     @property
     def actions(self):
@@ -221,18 +228,23 @@ class Action_state():
             return (action[0], self._poss_actions[set_value_idx])
 
     # Methods for properly fitting change based models
-    def _split_action_array(self):
+    def _split_action_array(self, action_array):
         action_lists = []
         for k in range(self._K):
-            action_k_indices = np.where(self._A_fit == k)[0]
+            action_k_indices = np.where(action_array == k)[0]
             action_lists.append(self._consecutive(action_k_indices))
         return action_lists
 
     # Get length of current action
-    def _get_action_len_fit(self, action):
-        for a in self._A_indices[action[0]]:
-            if self._n in a:
-                return a.size
+    def _get_action_len(self, action, which='real'):
+        if which == 'real':
+            for a in self._A_real_indices[action[0]]:
+                if self._n in a:
+                    return a.size
+        else:
+            for a in self._A_fit_indices[action[0]]:
+                if self._n in a:
+                    return a.size
 
     # Split array of indices into seperate arrays of consecutives indices (consecutive is specific by the stepsize parameter)
     def _consecutive(self, data, stepsize=1):

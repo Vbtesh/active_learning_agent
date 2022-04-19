@@ -18,7 +18,7 @@ import numpy as np
 ## Sigmoid
 
 class LC_linear_change_DIS(Discrete_IS):
-    def __init__(self, N, K, links, prior_param, dt, prop_const, variance, hypothesis, decay_type, decay_rate, generate_sample_space=True, sample_params=False, smoothing=False):
+    def __init__(self, N, K, links, prior_param, dt, prop_const, variance, hypothesis, decay_type, decay_rate=0.65, generate_sample_space=True, sample_params=False, smoothing=False):
         super().__init__(N, K, links, prior_param, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, smoothing=smoothing)
 
         self._c = 1 / prop_const
@@ -28,6 +28,8 @@ class LC_linear_change_DIS(Discrete_IS):
             self._calc_obs_stat = self._prop_distance
         elif hypothesis == 'cause_value':
             self._calc_obs_stat = self._prop_cause_value
+        elif hypothesis == 'cause_effect_values':
+            self._calc_obs_stat = self._cause_effect_values
         elif hypothesis == 'full_knowledge':
             self._calc_obs_stat = self._full_knowledge
 
@@ -41,6 +43,7 @@ class LC_linear_change_DIS(Discrete_IS):
         self._last_action = None
         self._last_action_len = None
         self._last_instant_action = None
+        self._last_real_action = None
         self._last_obs = np.zeros(self._K)
         self._last_action_idx = 0
 
@@ -55,37 +58,77 @@ class LC_linear_change_DIS(Discrete_IS):
         
         obs = sensory_state.s
         obs_alt = sensory_state.s_alt 
-        last_obs = self._last_obs
-
-        if not intervention and action_state.realised and action_state.a_real:
-            self._last_obs = obs
-            self._last_instant_action = intervention
-            return self._posterior_params
         
-        if not intervention and not self._last_action or self._n == 0:
-            self._last_obs = obs
-            self._last_instant_action = intervention
-            return self._posterior_params
 
-        if intervention:
-            if not self._last_action:
-                # First action taken
-                self._last_action = intervention
-                if action_state.realised:
-                    self._last_action_len = action_state.a_len_fit
-                else:
-                    self._last_action_len = action_state.a_len
-                self._last_action_idx = 0
-            elif intervention and not self._last_instant_action:
-                # Change action after observing
-                self._last_action = intervention
-                if action_state.realised:
-                    self._last_action_len = action_state.a_len_fit
-                else:
-                    self._last_action_len = action_state.a_len
+        # Action started but not learnable action
+        # If fitting, check between fit and real action
+        if action_state.realised:
+            # If fitting, check between fit and real action
+            if (not self._last_action and not action_state.a_real) or self._n == 0:
+                self._last_obs = obs
+                self._last_instant_action = action_state.a_real
+                return self._posterior_params
+
+            elif not self._last_action and action_state.a_real:
+                # First action
+                self._last_action_len = action_state.a_len_real      
+                # Reset last action index
                 self._last_action_idx = 0
 
+                self._last_action = action_state.a_real
 
+                if not intervention:
+                    self._last_action_idx += 1
+                    self._last_obs = obs
+                    self._last_instant_action = action_state.a_real
+                    return self._posterior_params
+
+            elif self._last_action and action_state.a_real:
+                if not self._last_instant_action:
+                    # CHANGE OF ACTION
+                    # Action length is
+                    self._last_action_len = action_state.a_len_real      
+                    # Reset last action index
+                    self._last_action_idx = 0
+
+                    self._last_action = action_state.a_real
+
+                    if not intervention:
+                        self._last_action_idx += 1
+                        self._last_obs = obs
+                        self._last_instant_action = action_state.a_real
+                        return self._posterior_params
+                else:
+                    if not intervention:
+                        self._last_action_idx += 1
+                        self._last_obs = obs
+                        self._last_instant_action = action_state.a_real
+                        return self._posterior_params
+        else:
+            # If generating data
+            if (not self._last_action and not intervention) or self._n == 0:
+                self._last_obs = obs
+                self._last_instant_action = intervention
+                return self._posterior_params
+            elif not self._last_action and intervention:
+                # Action length is
+                self._last_action_len = action_state.a_len     
+                # Reset last action index
+                self._last_action_idx = 0
+
+                self._last_action = intervention
+                self._last_instant_action = intervention
+            elif self._last_action and intervention:
+                if not self._last_instant_action:
+                    # Action length is
+                    self._last_action_len = action_state.a_len     
+                    # Reset last action index
+                    self._last_action_idx = 0
+
+                    self._last_action = intervention
+                    self._last_instant_action = intervention
+    
+        
         # Logic for updating
         # Compute power update coefficient
         delay = self._last_action_len
@@ -129,7 +172,11 @@ class LC_linear_change_DIS(Discrete_IS):
         # update mus
         self._last_action_idx += 1
         self._last_obs = obs
-        self._last_instant_action = intervention
+
+        if action_state.realised:
+            self._last_instant_action = action_state.a_real
+        else:
+            self._last_instant_action = intervention
 
         return log_posterior
         
@@ -148,16 +195,26 @@ class LC_linear_change_DIS(Discrete_IS):
 
         return self._c * change_effect / cause
 
+    ## Additive cause and effect values
+    def _cause_effect_values(self, change_effect, cause, effect):
+        if np.abs(cause) == 0 or np.abs(change_effect) > 20:
+            return np.inf
+
+        return self._c * change_effect / cause + effect / cause
+
     ## Full knowledge
     def _full_knowledge(self, change_effect, cause, effect):
         if np.abs(cause) == 0 or np.abs(change_effect) > 20:
             return np.inf
 
-        return self._c * change_effect / cause + effect / cause
+        return self._c * change_effect / cause + (effect * (np.abs(effect) / 100) )/ cause
     
     ## Proportional to distance
     ### NOT FUNCTIONAL: Requires additional logic as it fails for negative links
     def _prop_distance(self, change_effect, cause, effect):
+        if np.abs(cause - effect) == 0 or np.abs(change_effect) > 20:
+            return np.inf
+
         return self._c * (change_effect / (cause - effect))
         
 

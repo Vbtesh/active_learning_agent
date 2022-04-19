@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import pickle
 from os.path import exists
+from scipy.optimize import minimize
+import time
 
 from classes.experiment import Experiment
 from classes.agent import Agent
@@ -28,7 +30,6 @@ from methods.sample_space_methods import build_space_env
 def fit_models(internal_states_list,                # List of internal states names as strings
                action_states_list,                  # List of action states names as strings
                sensory_states_list,                 # List of sensory states names as strings
-               External_state,                      # External state name: OU_netowrk
                models_dict,                         # Dict of model object and parameters: can be changed in separate file                 
                data_dict,                           # Dict of data for each participants/trial/experiment
                build_space=True,                    # Boolean, set true for pre initialisation of fixed and large objects
@@ -41,9 +42,7 @@ def fit_models(internal_states_list,                # List of internal states na
     ## Initialise general invariant parameters
     K = 3
     links = np.array([-1, -0.5, 0, 0.5, 1]) # Possible link values
-    theta = 0.5 # Rigidity parameters
-    dt = 0.2 # Time step
-    sigma = 3 # Standard deviation
+
 
     # Build internal sample space
     if build_space:
@@ -106,7 +105,10 @@ def fit_models(internal_states_list,                # List of internal states na
             K = data.shape[1] # Number of variables
 
             # Set up OU netowrk 
-            external_state = External_state(N, K, theta, dt, sigma, ground_truth=ground_truth)
+            external_state = models_dict['external']['OU_Network']['object'](N, K, 
+                                                                             *models_dict['external']['OU_Network']['params']['args'],
+                                                                             **models_dict['external']['OU_Network']['params']['kwargs'], 
+                                                                             ground_truth=ground_truth)
             external_state.load_trial_data(data) # Load Data
 
             # Set up states
@@ -349,4 +351,229 @@ def softmax_neg_log_likelihood(temp, dataset, selection, return_selection=False)
         return - log_likelihood
     else:
         return - log_likelihood.sum()
+
+
+
+
+## General wrapper for fit_participant
+def fit_params_models_partlevel(params_initial_guesses,              # Initial guesses for params to fit
+                                params_bounds,                       # Bounds of params
+                                internal_params_labels,              # List of labels and indices in params of to fit of internal states params
+                                action_params_labels,                # List of labels and indices in params of to fit of action states params
+                                sensory_params_labels,               # List of labels and indices in params of to fit of action states params
+                                internal_states_list,                # List of internal states names as strings
+                                action_states_list,                  # List of action states names as strings
+                                sensory_states_list,                 # List of sensory states names as strings
+                                models_dict,                         # Dict of model object and parameters: can be changed in separate file                 
+                                data_dict,                           # Dict of data for each participants/trial/experiment
+                                build_space=True,                    # Boolean, set true for pre initialisation of fixed and large objects
+                                save_data=True):                     # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
+    # General loop
+    ## Initialise general invariant parameters
+    K = 3
+    links = np.array([-1, -0.5, 0, 0.5, 1]) # Possible link values
+
+    # Build internal sample space
+    if build_space:
+        space_triple = build_space_env(K, links)
+
+    # If save data, generate frames
+    if save_data:
+        # Define DataFrame
+        cols = ['pid', 'experiment', 'num_trials', 'model_name', 'nLL', 'bic', 'params', 'params_labels', 'success', 'message', 'time']
+        df = pd.DataFrame(columns=cols)
+        
+
+
+        
+    # Count participant index
+    sample_size = len(data_dict.keys())
+    part_idx = 0
+    start = time.perf_counter()
+    for participant, part_data in data_dict.items():
+        tic = time.perf_counter()
+        print(f'participant {part_idx+1}, out of {sample_size}. Elapsed = {(tic - start)/60} minutes' )
+
+        # Participant metadata
+        part_experiment = part_data['experiment']
+
+        x_in = params_initial_guesses
+        params_fixed = (
+            part_data,
+            internal_states_list,
+            action_states_list,                  # List of action states names as strings
+            sensory_states_list,                 # List of sensory states names as stringsmodels_dict, 
+            models_dict,
+            internal_params_labels,              # List of labels and indices in params of to fit of internal states params
+            action_params_labels,
+            sensory_params_labels,
+            space_triple 
+        )
+
+        minimize_out = minimize(fit_participant, x_in, args=params_fixed, bounds=params_bounds)
+
+        # Extract relevant data
+
+        # If not saving data, continue here
+        if not save_data:
+            part_idx += 1 
+            continue
+            
+        toc = time.perf_counter()
+        out_data = [
+            participant,
+            part_experiment,
+            len(part_data['trials'].keys()),
+            internal_states_list[0],
+            minimize_out.fun,
+            len(minimize_out.x) * np.log(len(part_data['trials'].keys())) + 2 * minimize_out.fun,
+            minimize_out.x,
+            internal_params_labels + action_params_labels + sensory_params_labels,  
+            minimize_out.success,
+            minimize_out.message,
+            (toc - tic) / 60
+        ]
+        #out_data = [
+        #    participant,
+        #    part_experiment,
+        #    len(part_data['trials'].keys()),
+        #    internal_states_list[0],
+        #    'ph',
+        #    internal_params_labels,  
+        #    'ph',
+        #    'ph',
+        #    'ph',
+        #    (toc - tic) / 60
+        #]
+        # Add output to df
+        df.loc[len(df.index)] = out_data
+        # Save data every 5 participants and reset df
+        if part_idx % 25 == 0:
+            df.to_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit.csv')
+
+        part_idx += 1 
+
+    
+    # Final save
+    if save_data:
+        df.to_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit.csv')    
+
+        return df
+
+
+## Fit participant wise with run
+def fit_participant(params_to_fit, 
+                    part_data, 
+                    internal_states_list,                # List of internal states names as strings
+                    action_states_list,                  # List of action states names as strings
+                    sensory_states_list,                 # List of sensory states names as stringsmodels_dict, 
+                    models_dict,
+                    internal_params_labels,              # List of labels and indices in params of to fit of internal states params
+                    action_params_labels,
+                    sensory_params_labels,
+                    space_triple,
+                    fit_judgement=False):                 
+
+    trials = part_data['trials']
+    nLL = 0
+
+    for trial_type, trial_data in trials.items():
+        
+        # Extract data from participant's trial
+        model_name = trial_data['name'][:-2]
+        difficulty = trial_type
+        data = trial_data['data'] # Raw numerical data of variable values
+        ground_truth = trial_data['ground_truth'] # Ground truth model from which data has been generated
+        inters = trial_data['inters'] # Interventions as is
+        inters_fit = trial_data['inters_fit'] # Interventions with removed movements
+        judgement_data = trial_data['links_hist'] # Change in judgement sliders
+        posterior_judgement = trial_data['posterior'] # Final states of judgement sliders
+        prior_judgement = trial_data['prior'] if 'prior' in trial_data.keys() else None
+
+        # Unpack generic trial relevant parameters
+        N = data.shape[0] # Number of datapoints
+        K = data.shape[1] # Number of variables
+
+        # Set up OU netowrk 
+        external_state = models_dict['external']['OU_Network']['object'](N, K, 
+                                                                           *models_dict['external']['OU_Network']['params']['args'],
+                                                                           **models_dict['external']['OU_Network']['params']['kwargs'], 
+                                                                           ground_truth=ground_truth)
+        external_state.load_trial_data(data) # Load Data
+
+        # Set up states
+        ## Internal states
+        internal_states = []   
+        
+        for model in internal_states_list:
+            internal_states_kwargs = models_dict['internal'][model]['params']['kwargs']
+            if internal_params_labels:
+                for i, param_fit in enumerate(internal_params_labels):
+                    internal_states_kwargs[param_fit[0]] = params_to_fit[param_fit[1]]
+
+            i_s = models_dict['internal'][model]['object'](N, K, 
+                                                           *models_dict['internal'][model]['params']['args'],
+                                                           **internal_states_kwargs,
+                                                           generate_sample_space = False)
+            # Initialse space according to build_space
+            i_s.add_sample_space_env(space_triple)
+            # Initialise prior distributions for all IS
+            i_s.initialise_prior_distribution(prior_judgement)
+            # Load data
+
+            ###### TWO CHOICES HERE, EITHER SOFTMAX THROUGH THE TRIAL (OR AT THE END)
+            i_s.load_judgement_data(judgement_data, posterior_judgement, fit_judgement)
+            internal_states.append(i_s)
+
+        ## Action states
+        action_states = []
+        for model in action_states_list:
+            action_states_kwargs = models_dict['actions'][model]['params']['kwargs']
+            if action_params_labels:
+                for i, param_fit in enumerate(action_params_labels):
+                    action_states_kwargs[param_fit[0]] = params_to_fit[param_fit[1]]
+
+            a_s = models_dict['actions'][model]['object'](N, K, 
+                                                         *models_dict['actions'][model]['params']['args'],
+                                                         **action_states_kwargs)
+            # Load action data
+            a_s.load_action_data(inters, inters_fit, data)
+            action_states.append(a_s)
+        if len(action_states) == 1: # Must be true atm, multiple action states are not supported
+            action_states = action_states[0] 
+
+        ## Sensory states
+        sensory_states = []
+        for model in sensory_states_list:
+            sensory_states_kwargs = models_dict['sensory'][model]['params']['kwargs']
+            if sensory_params_labels:
+                for i, param_fit in enumerate(sensory_params_labels):
+                    sensory_states_kwargs[param_fit[0]] = params_to_fit[param_fit[1]]
+            sensory_s = models_dict['sensory'][model]['object'](N, K, 
+                                                                *models_dict['sensory'][model]['params']['args'],
+                                                                **sensory_states_kwargs)
+            sensory_states.append(sensory_s)
+        
+        if len(sensory_states) == 1: # Must be true atm, multiple sensory states are not supported
+            sensory_states = sensory_states[0]
+
+        # Create agent
+        if len(internal_states) == 1:
+            agent = Agent(N, sensory_states, internal_states[0], action_states)
+        else:
+            agent = Agent(N, sensory_states, internal_states, action_states)
+
+        # Create experiment
+        experiment = Experiment(agent, external_state)
+
+        # Fit data
+        experiment.fit(console=False)
+
+        # Extract relevant data
+        # Extract posterior
+        judgement_LL = -1 * internal_states[0].posterior_PF(posterior_judgement, log=True)[0]
+        if judgement_LL != np.nan:
+            nLL += judgement_LL
+
+    return nLL
 

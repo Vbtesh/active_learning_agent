@@ -5,7 +5,7 @@ import pickle
 from classes.ou_network import OU_Network
 from methods.sample_space_methods import build_space
 from methods.model_fitting_utilities import fit_models
-from methods.states_params_importer import import_states_asdict, import_params_asdict, import_states_params_asdict
+from methods.states_params_importer import import_states_asdict, import_states_params_asdict
 
 
 ## Import behavioural experiment
@@ -16,7 +16,7 @@ experiments = ['experiment_3']
 
 print(len(modelling_data.keys()))
 selected_data = {}
-pick_interval = 10
+pick_interval = 34
 idx = 0
 for part, data in modelling_data.items():
     if data['experiment'] in experiments and idx % pick_interval == 0:
@@ -34,11 +34,10 @@ for part, part_data in selected_data.items():
 
 
 states_dict = import_states_asdict()
-params_dict = import_params_asdict()
 models_dict = import_states_params_asdict()
 
 
-internal_states_list = ['change_discrete']
+internal_states_list = ['LC_discrete_attention','change_d_obs_fk', 'change_d_obs_cause_effect', 'change_d_obs_cause']
 action_states_list = ['experience_vao']
 sensory_states_list = ['omniscient']
 external_state = OU_Network
@@ -54,7 +53,6 @@ console = True
 fit_models(internal_states_list,
            action_states_list,
            sensory_states_list,
-           external_state,
            models_dict,
            selected_data,
            save_data=save_data,

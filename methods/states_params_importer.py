@@ -1,4 +1,5 @@
 import numpy as np
+from classes.action_states.action_state import Treesearch_AS
 
 from classes.ou_network import OU_Network
 
@@ -74,7 +75,7 @@ hypothesis = 'full_knowledge' # can be 'distance', 'cause_value' and 'full_knowl
 
 
 # SENSORY STATES parameters
-change_memory = 2/3 # 1 means no smoothing, just look at raw change
+change_memory = 1 # 1 means no smoothing, just look at raw change
 change_type = 'raw' # Can be 'normalised', 'relative', 'raw'
 
 
@@ -112,149 +113,240 @@ experience_measure = 'information' # Can be "information" or "change"
 discrete_policy_funcs = discrete_policy_init()
 
 # All but trial dependent stuff: Number of datapoint, Number of variables
-def import_params_asdict():
+def import_states_params_asdict():
     params_dict = {
+        'external': {
+            'OU_Network': {
+                'object': OU_Network,
+                'params': {
+                    'args': [
+                        theta,
+                        dt,
+                        sigma
+                    ],
+                    'kwargs': {}
+                }
+            }
+        },
         'internal': {
             'normative': {
-                'args': [
-                    L,
-                    prior_param, # Prior (should be flat or depend on the empirical prior, needs more attention)
-                    dt, 
-                    theta,
-                    sigma,
-                ],
-                'kwargs': {
-                    'smoothing': beta
+                'object': Normative_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        prior_param, # Prior (should be flat or depend on the empirical prior, needs more attention)
+                        dt, 
+                        theta,
+                        sigma,
+                    ],
+                    'kwargs': {
+                        'smoothing': beta
+                    }
                 }
+                
             },
             'LC_discrete': {
-                'args': [
-                    L,
-                    prior_param,
-                    dt,
-                    theta,
-                    sigma
-                ],
-                'kwargs': {
-                    'smoothing': beta
+                'object': Local_computations_omniscient_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        prior_param, # Prior (should be flat or depend on the empirical prior, needs more attention)
+                        dt, 
+                        theta,
+                        sigma,
+                    ],
+                    'kwargs': {
+                        'smoothing': beta
+                    }
                 }
             },
             'LC_continuous': {
-                'args': [],
-                'kwargs': {}
+                'object': Local_computations_omniscient_CIS,
+                'params': {
+                    'args': [],
+                    'kwargs': {}
+                }     
             },
             'LC_discrete_attention': {
-                'args': [
-                    L,
-                    prior_param,
-                    dt,
-                    theta,
-                    sigma,
-                    decay_type,
-                    decay_rate
-                ],
-                'kwargs': {
-                    'smoothing': beta
+                'object': Local_computations_interfocus_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        prior_param, # Prior (should be flat or depend on the empirical prior, needs more attention)
+                        dt, 
+                        theta,
+                        sigma,
+                        decay_type  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'smoothing': beta
+                    }
                 }
             },
-            'change_discrete': {
-                'args': [
-                    L,
-                    prior_param,
-                    dt,
-                    prop_constant,
-                    samples_variance,
-                    hypothesis,
-                    decay_type,
-                    decay_rate
-                ],
-                'kwargs': {
-                    'smoothing': beta
+            'change_d_obs_fk': {
+                'object': LC_linear_change_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        prior_param,
+                        dt,
+                        prop_constant,
+                        samples_variance,
+                        'full_knowledge',
+                        decay_type  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'smoothing': beta
+                    }
                 }
+                
+            },
+            'change_d_obs_cause_effect': {
+                'object': LC_linear_change_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        prior_param,
+                        dt,
+                        prop_constant,
+                        samples_variance,
+                        'cause_effect_values',
+                        decay_type 
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'smoothing': beta
+                    }
+                }   
+            },
+            'change_d_obs_cause': {
+                'object': LC_linear_change_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        prior_param,
+                        dt,
+                        prop_constant,
+                        samples_variance,
+                        'cause_value',
+                        decay_type  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'smoothing': beta
+                    }
+                }
+                
+            },
+            'change_d_obs_dist': {
+                'object': LC_linear_change_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        prior_param,
+                        dt,
+                        prop_constant,
+                        samples_variance,
+                        'distance',
+                        decay_type  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'smoothing': beta
+                    }
+                }
+                
             },
             'change_continuous': {
-                'args': [
-                    L,
-                    prior_param,
-                    dt,
-                    prop_constant,
-                    samples_variance,
-                    hypothesis,
-                    decay_type,
-                    decay_rate
-                ],
-                'kwargs': {
-                    'smoothing': beta
+                'object': LC_linear_change_CIS,
+                'params': {
+                    'args': [
+                        L,
+                        prior_param,
+                        dt,
+                        prop_constant,
+                        samples_variance,
+                        hypothesis,
+                        decay_type,
+                        decay_rate  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'smoothing': beta
+                    }
                 }
+                
             },
         },
         'actions': {
             'tree_search_soft_horizon': {
-                'args': [
-                    behaviour,
-                    epsilon,
-                    tree_search_poss_actions,
-                    action_len,
-                    softmax_policy_funcs,
-                    C,
-                    knowledge,
-                    discount,
-                    horizon
-                ],
-                'kwargs': {}
+                'object': Discounted_gain_soft_horizon_TSAS,
+                'params': {
+                    'args': [
+                        behaviour,
+                        epsilon,
+                        tree_search_poss_actions,
+                        action_len,
+                        softmax_policy_funcs,
+                        C,
+                        knowledge,
+                        discount,
+                        horizon
+                    ],
+                    'kwargs': {}
+                }
             },
             'tree_search_hard_horizon': {
-                'args': [
-                    behaviour,
-                    epsilon,
-                    tree_search_poss_actions,
-                    action_len,
-                    softmax_policy_funcs,
-                    C,
-                    knowledge,
-                    depth
-                ],
-                'kwargs': {}
+                'object': Undiscounted_gain_hard_horizon_TSAS,
+                'params': {
+                    'args': [
+                        behaviour,
+                        epsilon,
+                        tree_search_poss_actions,
+                        action_len,
+                        softmax_policy_funcs,
+                        C,
+                        knowledge,
+                        depth
+                    ],
+                    'kwargs': {}
+                }
+                
             },
             'experience_vao': {
-                'args': [
-                    behaviour,
-                    epsilon,
-                    experience_poss_actions,
-                    discrete_policy_funcs, # Not right
-                    time_unit,
-                    max_acting_time,
-                    max_obs_time,
-                    experience_measure,
-                    actions_prior_params,
-                    action_learn_rate
-                ],
-                'kwargs': {}
-            },
+                'object': Experience_discrete_3D_AS,
+                'params': {
+                    'args': [
+                        behaviour,
+                        epsilon,
+                        experience_poss_actions,
+                        discrete_policy_funcs, # Not right
+                        time_unit,
+                        max_acting_time,
+                        max_obs_time,
+                        experience_measure,
+                        actions_prior_params,
+                        action_learn_rate
+                    ],
+                    'kwargs': {}
+                }
+            }
+                
         },
         'sensory': {
             'omniscient': {
-                'args': [],
-                'kwargs': {
-                    'alpha': change_memory,
-                    'change': change_type
-                }
+                'object': Omniscient_ST,
+                'params': {
+                    'args': [],
+                    'kwargs': {
+                        'change_memory': change_memory,
+                        'change': change_type
+                    }
+                }     
             }
         }
     }
     return params_dict
 
-
-def import_states_params_asdict():
-    states_dict = import_states_asdict()
-    params_dict = import_params_asdict()
-
-    states_params_dict = {}
-    for state_type, state_spec in states_dict.items():
-        states_params_dict[state_type] = {}
-        for state_name, state_data in state_spec.items():
-            states_params_dict[state_type][state_name] = {}
-            states_params_dict[state_type][state_name]['object'] = states_dict[state_type][state_name]
-            states_params_dict[state_type][state_name]['params'] = params_dict[state_type][state_name]
-
-    return states_params_dict

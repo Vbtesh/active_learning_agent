@@ -8,9 +8,9 @@ import numpy as np
 ## alpha: change "smoothing" rate, represents the memory of recent change and serves to smooth out one step variance or noise from the data
 
 class Omniscient_ST(Sensory_state):
-    def __init__(self, N, K, alpha=0.5, change='relative', value_range=(-100, 100)):
+    def __init__(self, N, K, change_memory=0.5, change='relative', value_range=(-100, 100)):
         super().__init__(N, K, self.omniscient_observation)
-        self._alpha = alpha
+        self._alpha = change_memory
         self._obs_alt_record = True
 
         self.change_summary = change

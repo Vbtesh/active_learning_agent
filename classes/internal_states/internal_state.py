@@ -5,6 +5,8 @@ import pandas as pd
 from scipy import stats
 from scipy.stats import distributions
 
+from classes.action_states.experience_discrete_3D_AS import Experience_discrete_3D_AS
+
 
 
 # Main Internal state class
@@ -204,11 +206,11 @@ class Discrete_IS(Internal_state):
     def posterior(self):
         posterior = self._likelihood(self._posterior_params)
         if len(posterior.shape) == 1:
-            smoothed_posterior = self._links_to_models(self._smooth(self._models_to_links(posterior)))
+            smoothed_posterior = self._links_to_models(self._smooth_softmax(self._models_to_links(posterior)))
             #print('Diff:', np.sum(np.abs(posterior - smoothed_posterior)))
             return smoothed_posterior
         else:
-            smoothed_posterior = self._smooth(posterior)
+            smoothed_posterior = self._smooth_softmax(posterior)
             #print('Diff:', np.sum(np.abs(posterior - smoothed_posterior)))
             return smoothed_posterior
 
@@ -349,6 +351,18 @@ class Discrete_IS(Internal_state):
         smoothed_values = dist + certainty_coef * smoother
 
         return smoothed_values / smoothed_values.sum(axis=1).reshape((dist.shape[0], 1))
+
+    def _smooth_softmax(self, dist):
+        if self._smoothing_temp == None:
+            return dist
+        
+        if len(dist.shape) == 1:
+            dist = dist.reshape((1, dist.size))
+
+        exp_dist = np.exp(dist * self._smoothing_temp)
+        norm = exp_dist.sum(axis=1).reshape((exp_dist.shape[0], 1))
+
+        return exp_dist / norm
 
 
     def _entropy(self, distribution, custom=False):

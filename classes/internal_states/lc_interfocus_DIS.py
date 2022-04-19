@@ -4,7 +4,7 @@ import numpy as np
 
 # Local computation discrete agent
 class Local_computations_interfocus_DIS(Discrete_IS):
-    def __init__(self, N, K, links, prior_param, dt, theta, sigma, decay_type, decay_rate, generate_sample_space=True, sample_params=False, smoothing=False):
+    def __init__(self, N, K, links, prior_param, dt, theta, sigma, decay_type, decay_rate=0.65, generate_sample_space=True, sample_params=False, smoothing=False):
         super().__init__(N, K, links, prior_param, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, smoothing=smoothing)
 
                 # Sample parameter estimates
@@ -36,6 +36,7 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         self._last_action = None
         self._last_action_len = None
         self._last_instant_action = None
+        self._last_real_action = None
 
         self._power_update_coef_history = np.zeros(self._N)
 
@@ -43,38 +44,79 @@ class Local_computations_interfocus_DIS(Discrete_IS):
 
     def _update_rule(self, sensory_state, action_state):
         intervention = action_state.a
+        
         obs = sensory_state.s
         
-        if not intervention and action_state.realised and action_state.a_real:
-            self._last_obs = obs
-            self._last_instant_action = intervention
-            return self._posterior_params
-        
-        if not intervention and not self._last_action or self._n == 0:
-            self._last_obs = obs
-            self._last_instant_action = intervention
-            return self._posterior_params
+        if action_state.realised:
+            # If fitting, check between fit and real action
+            if (not self._last_action and not action_state.a_real) or self._n == 0:
+                self._last_obs = obs
+                self._last_instant_action = action_state.a_real
+                return self._posterior_params
 
-        if intervention:
-            if not self._last_action:
-                # First action taken
-                self._last_action = intervention
-                if action_state.realised:
-                    self._last_action_len = action_state.a_len_fit
-                else:
-                    self._last_action_len = action_state.a_len
+            elif not self._last_action and action_state.a_real:
+                # First action
+                self._last_action_len = action_state.a_len_real      
+                # Reset last action index
                 self._last_action_idx = 0
-            elif intervention and not self._last_instant_action:
-                # Change action after observing
-                self._last_action = intervention
-                if action_state.realised:
-                    self._last_action_len = action_state.a_len_fit
+
+                self._last_action = action_state.a_real
+
+                if not intervention:
+                    self._last_action_idx += 1
+                    self._last_obs = obs
+                    self._last_instant_action = action_state.a_real
+                    return self._posterior_params
+
+            elif self._last_action and action_state.a_real:
+                if not self._last_instant_action:
+                    # CHANGE OF ACTION
+                    # Action length is
+                    self._last_action_len = action_state.a_len_real      
+                    # Reset last action index
+                    self._last_action_idx = 0
+
+                    self._last_action = action_state.a_real
+
+                    if not intervention:
+                        self._last_action_idx += 1
+                        self._last_obs = obs
+                        self._last_instant_action = action_state.a_real
+                        return self._posterior_params
                 else:
-                    self._last_action_len = action_state.a_len
+                    if not intervention:
+                        self._last_action_idx += 1
+                        self._last_obs = obs
+                        self._last_instant_action = action_state.a_real
+                        return self._posterior_params
+        else:
+            # If generating data
+            if (not self._last_action and not intervention) or self._n == 0:
+                self._last_obs = obs
+                self._last_instant_action = intervention
+                return self._posterior_params
+            elif not self._last_action and intervention:
+                # Action length is
+                self._last_action_len = action_state.a_len     
+                # Reset last action index
                 self._last_action_idx = 0
+
+                self._last_action = intervention
+                self._last_instant_action = intervention
+            elif self._last_action and intervention:
+                if not self._last_instant_action:
+                    # Action length is
+                    self._last_action_len = action_state.a_len     
+                    # Reset last action index
+                    self._last_action_idx = 0
+
+                    self._last_action = intervention
+                    self._last_instant_action = intervention
+
     
         # Logic for updating
         # Compute power update coefficient
+
         delay = self._last_action_len
         power_coef = self._power_update_coef(delay)
         self._power_update_coef_history[self._n] = power_coef
@@ -102,12 +144,17 @@ class Local_computations_interfocus_DIS(Discrete_IS):
 
         # update mus
         self._update_mus(obs)
+
+        self._last_obs = obs
         self._last_action_idx += 1
-        self._last_instant_action = intervention
+        if action_state.realised:
+            self._last_instant_action = action_state.a_real
+        else:
+            self._last_instant_action = intervention
 
         return log_posterior
 
-    
+
     # Background methods
     ## Prior initialisation specific to model:
     def _local_prior_init(self):
