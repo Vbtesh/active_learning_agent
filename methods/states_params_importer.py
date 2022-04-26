@@ -1,3 +1,4 @@
+from statistics import variance
 import numpy as np
 from classes.action_states.action_state import Treesearch_AS
 
@@ -9,6 +10,7 @@ from classes.internal_states.normative_DIS import Normative_DIS
 from classes.internal_states.change_based_CIS import LC_linear_change_CIS
 from classes.internal_states.change_based_DIS import LC_linear_change_DIS
 from classes.internal_states.lc_interfocus_DIS import Local_computations_interfocus_DIS
+from classes.internal_states.causal_event_segmentation_DIS import causal_event_segmentation_DIS
 
 from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
 from classes.action_states.undiscounted_gain_hard_horizon_TSAS import Undiscounted_gain_hard_horizon_TSAS
@@ -28,7 +30,8 @@ def import_states_asdict():
             'LC_continuous': Local_computations_omniscient_CIS,
             'LC_discrete_attention': Local_computations_interfocus_DIS,
             'change_discrete': LC_linear_change_DIS,
-            'change_continuous': LC_linear_change_CIS
+            'change_continuous': LC_linear_change_CIS,
+            'causal_event_segmentation': causal_event_segmentation_DIS
         },
         'actions': {
             'tree_search_soft_horizon': Discounted_gain_soft_horizon_TSAS,
@@ -59,10 +62,10 @@ ground_truth = np.zeros(K**2 - K)  # Ground truth model generating the data: /!\
 # INTERNAL STATE parameters
 L = np.array([-1, -1/2, 0, 1/2, 1]) # Possible link values
 prior_param = 1 # Priors param: temperature for discrete and variance form continuous /!\ Depends on the trial /!\
-beta = None # Temperature for the softmax smothing function, will be fitted
+beta = 40 # Temperature for the softmax smothing function, will be fitted
 
 ## Attention based internal states
-decay_rate = 0.65 # Discount rate of attention 
+decay_rate = 1 # Discount rate of attention 
 decay_type = 'sigmoid' # Functional form of attention parameter: 'exponential' or 'sigmoid'
 
 ## Normative and LC
@@ -70,9 +73,16 @@ decay_type = 'sigmoid' # Functional form of attention parameter: 'exponential' o
 
 ## Change based internal states
 prop_constant = theta*dt
-samples_variance = 1e-1 # Variance of the likelihood of the links samples
+samples_variance = 3/5 # Variance of the likelihood of the links samples
 hypothesis = 'full_knowledge' # can be 'distance', 'cause_value' and 'full_knowledge'
 
+# Causal event segmentation
+abs_bounds = (0, 100)
+ces_type = 'time_sensitive'
+ce_threshold = 0.3 # Causal event threshold (read as a percentage of bounds)
+time_threshold = 10  # The time threshold in frames before is strong, after is weak
+guess = 0.3 # The probability mass to be shared among other possibilities
+beta_ces = 4
 
 # SENSORY STATES parameters
 change_memory = 1 # 1 means no smoothing, just look at raw change
@@ -134,12 +144,12 @@ def import_states_params_asdict():
                 'params': {
                     'args': [
                         L,
-                        prior_param, # Prior (should be flat or depend on the empirical prior, needs more attention)
                         dt, 
                         theta,
                         sigma,
                     ],
                     'kwargs': {
+                        'prior_param': prior_param,
                         'smoothing': beta
                     }
                 }
@@ -149,13 +159,13 @@ def import_states_params_asdict():
                 'object': Local_computations_omniscient_DIS,
                 'params': {
                     'args': [
-                        L,
-                        prior_param, # Prior (should be flat or depend on the empirical prior, needs more attention)
+                        L, 
                         dt, 
                         theta,
                         sigma,
                     ],
                     'kwargs': {
+                        'prior_param': prior_param,
                         'smoothing': beta
                     }
                 }
@@ -171,8 +181,7 @@ def import_states_params_asdict():
                 'object': Local_computations_interfocus_DIS,
                 'params': {
                     'args': [
-                        L,
-                        prior_param, # Prior (should be flat or depend on the empirical prior, needs more attention)
+                        L, 
                         dt, 
                         theta,
                         sigma,
@@ -180,6 +189,7 @@ def import_states_params_asdict():
                     ],
                     'kwargs': {
                         'decay_rate': decay_rate,
+                        'prior_param': prior_param,
                         'smoothing': beta
                     }
                 }
@@ -189,15 +199,15 @@ def import_states_params_asdict():
                 'params': {
                     'args': [
                         L,
-                        prior_param,
                         dt,
                         prop_constant,
-                        samples_variance,
                         'full_knowledge',
                         decay_type  
                     ],
                     'kwargs': {
+                        'lh_var': samples_variance,
                         'decay_rate': decay_rate,
+                        'prior_param': prior_param,
                         'smoothing': beta
                     }
                 }
@@ -208,15 +218,15 @@ def import_states_params_asdict():
                 'params': {
                     'args': [
                         L,
-                        prior_param,
                         dt,
                         prop_constant,
-                        samples_variance,
                         'cause_effect_values',
                         decay_type 
                     ],
                     'kwargs': {
+                        'lh_var': samples_variance,
                         'decay_rate': decay_rate,
+                        'prior_param': prior_param,
                         'smoothing': beta
                     }
                 }   
@@ -226,15 +236,15 @@ def import_states_params_asdict():
                 'params': {
                     'args': [
                         L,
-                        prior_param,
                         dt,
                         prop_constant,
-                        samples_variance,
                         'cause_value',
                         decay_type  
                     ],
                     'kwargs': {
+                        'lh_var': samples_variance,
                         'decay_rate': decay_rate,
+                        'prior_param': prior_param,
                         'smoothing': beta
                     }
                 }
@@ -245,26 +255,108 @@ def import_states_params_asdict():
                 'params': {
                     'args': [
                         L,
-                        prior_param,
                         dt,
                         prop_constant,
-                        samples_variance,
                         'distance',
                         decay_type  
                     ],
                     'kwargs': {
+                        'lh_var': samples_variance,
                         'decay_rate': decay_rate,
+                        'prior_param': prior_param,
                         'smoothing': beta
                     }
+                }    
+            },
+            'ces_strength': {
+                'object': causal_event_segmentation_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        abs_bounds,
+                        'strength_sensitive'
+                    ],
+                    'kwargs': {
+                        'ce_threshold': ce_threshold,
+                        'time_threshold': time_threshold,
+                        'prior_param': prior_param,
+                        'guess': guess
+                    }
                 }
-                
+
+            },
+            'ces_strength_unrestricted': {
+                'object': causal_event_segmentation_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        abs_bounds,
+                        'strength_sensitive'
+                    ],
+                    'kwargs': {
+                        'ce_threshold': ce_threshold,
+                        'time_threshold': time_threshold,
+                        'prior_param': prior_param,
+                        'guess': guess
+                    }
+                }
+
+            },
+            'ces_strength_softmax': {
+                'object': causal_event_segmentation_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        abs_bounds,
+                        'strength_sensitive'
+                    ],
+                    'kwargs': {
+                        'ce_threshold': ce_threshold,
+                        'prior_param': prior_param,
+                        'smoothing': beta_ces
+                    }
+                }
+            },
+            'ces_no_strength': {
+                'object': causal_event_segmentation_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        abs_bounds,
+                        'strength_insensitive'
+                    ],
+                    'kwargs': {
+                        'ce_threshold': ce_threshold,
+                        'guess': guess,
+                        'prior_param': prior_param
+                    }
+                }
+            },
+            'ces_no_strength_softmax': {
+                'object': causal_event_segmentation_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        abs_bounds,
+                        'strength_insensitive'
+                    ],
+                    'kwargs': {
+                        'ce_threshold': ce_threshold,
+                        'prior_param': prior_param,
+                        'smoothing': beta_ces
+                    }
+                }
             },
             'change_continuous': {
                 'object': LC_linear_change_CIS,
                 'params': {
                     'args': [
                         L,
-                        prior_param,
                         dt,
                         prop_constant,
                         samples_variance,
@@ -274,6 +366,7 @@ def import_states_params_asdict():
                     ],
                     'kwargs': {
                         'decay_rate': decay_rate,
+                        'prior_param': prior_param,
                         'smoothing': beta
                     }
                 }

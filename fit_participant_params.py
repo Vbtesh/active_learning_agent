@@ -3,7 +3,7 @@ import pickle
 
 from classes.ou_network import OU_Network
 from methods.sample_space_methods import build_space
-from methods.model_fitting_utilities import fit_params_models_partlevel
+from methods.model_fitting_utilities import fit_params_models_partlevel, params_to_fit_importer
 from methods.states_params_importer import import_states_params_asdict
 
 ## Import behavioural experiment
@@ -30,42 +30,46 @@ models_to_fit = [
     'change_d_obs_cause_effect',
     'change_d_obs_cause',
     'LC_discrete',
-    'normative'
+    'normative',
+    'ces_strength',
+    'ces_no_strength',
+    'ces_strength_unrestricted',
+    'ces_strength_softmax',
+    'ces_no_strength_softmax'
 ]
 # Pick states to fit
 internal_states_list = ['normative']
 action_states_list = ['experience_vao']
 sensory_states_list = ['omniscient']
 
+
 fitting_softmax = True
+fitting_change = True
+fitting_attention = True
 
-if internal_states_list[0][:6] == 'change' and fitting_softmax:
-    params_initial_guesses = [2/3, 0, 1/2]           
-    params_bounds = [(0, 1), (0, 2000), (1/10, 1)]                       
-    internal_params_labels = [['decay_rate', 0], ['smoothing', 1]]            
-    action_params_labels = []              
-    sensory_params_labels = [['change_memory', 2]]
+# CES
+fitting_guess = True
+fitting_strength = True
 
-elif internal_states_list[0][:6] == 'change' and not fitting_softmax:
-    params_initial_guesses = [2/3, 1/2]           
-    params_bounds = [(0, 1), (1/10, 1)]                       
-    internal_params_labels = [['decay_rate', 0]]            
-    action_params_labels = []              
-    sensory_params_labels = [['change_memory', 1]]
+# Prior
+fitting_prior = True
 
-elif internal_states_list[0] == 'LC_discrete_attention':
-    params_initial_guesses = [2/3, 0]           
-    params_bounds = [(0, 1), (0, 2000)]                       
-    internal_params_labels = [['decay_rate', 0], ['smoothing', 1]]            
-    action_params_labels = []               
-    sensory_params_labels = []
+random_increment = 1
 
-elif internal_states_list[0] == 'normative' or internal_states_list[0] == 'LC_discrete':
-    params_initial_guesses = [0]           
-    params_bounds = [(0, 2000)]                       
-    internal_params_labels = [['smoothing', 0]]            
-    action_params_labels = []              
-    sensory_params_labels = []
+params_to_fit_tuple = params_to_fit_importer(internal_states_list[0], 
+                                             fitting_change=fitting_change,
+                                             fitting_attention=fitting_attention,
+                                             fitting_guess=fitting_guess,
+                                             fitting_strength=fitting_strength,
+                                             fitting_prior=fitting_prior,
+                                             random_increment=random_increment)
+params_initial_guesses = params_to_fit_tuple[0]
+params_bounds = params_to_fit_tuple[1]
+internal_params_labels = params_to_fit_tuple[2]
+action_params_labels = params_to_fit_tuple[3]
+sensory_params_labels = params_to_fit_tuple[4]
+fitting_list = params_to_fit_tuple[5]
+
 
 print(f'Fitting: {internal_states_list[0]}...')
 print(f'Parameters: {internal_params_labels + action_params_labels + sensory_params_labels}')
@@ -88,4 +92,5 @@ summary = fit_params_models_partlevel(params_initial_guesses,
                                       action_states_list,
                                       sensory_states_list,
                                       models_dict,
-                                      selected_data)
+                                      selected_data,
+                                      fitting_list)

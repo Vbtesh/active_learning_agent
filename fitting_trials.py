@@ -16,7 +16,7 @@ experiments = ['experiment_3']
 
 print(len(modelling_data.keys()))
 selected_data = {}
-pick_interval = 34
+pick_interval = 28
 idx = 0
 for part, data in modelling_data.items():
     if data['experiment'] in experiments and idx % pick_interval == 0:
@@ -37,7 +37,7 @@ states_dict = import_states_asdict()
 models_dict = import_states_params_asdict()
 
 
-internal_states_list = ['LC_discrete_attention','change_d_obs_fk', 'change_d_obs_cause_effect', 'change_d_obs_cause']
+internal_states_list = ['change_d_obs_fk']
 action_states_list = ['experience_vao']
 sensory_states_list = ['omniscient']
 external_state = OU_Network

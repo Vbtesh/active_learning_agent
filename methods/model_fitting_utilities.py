@@ -1,4 +1,3 @@
-from sys import intern
 import numpy as np
 import pandas as pd
 import pickle
@@ -365,7 +364,8 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
                                 action_states_list,                  # List of action states names as strings
                                 sensory_states_list,                 # List of sensory states names as strings
                                 models_dict,                         # Dict of model object and parameters: can be changed in separate file                 
-                                data_dict,                           # Dict of data for each participants/trial/experiment
+                                data_dict,
+                                fitting_list,                           # Dict of data for each participants/trial/experiment
                                 build_space=True,                    # Boolean, set true for pre initialisation of fixed and large objects
                                 save_data=True):                     # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
     # General loop
@@ -379,9 +379,19 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
 
     # If save data, generate frames
     if save_data:
-        # Define DataFrame
-        cols = ['pid', 'experiment', 'num_trials', 'model_name', 'nLL', 'bic', 'params', 'params_labels', 'success', 'message', 'time']
-        df = pd.DataFrame(columns=cols)
+        if exists(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv'):
+            df = pd.read_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv')
+            if 'Unnamed: 0' in df.columns:
+                df = df.drop(['Unnamed: 0'], axis=1)
+            if not df.empty:
+                pids_done = df.pid.to_list()
+            else:
+                pids_done = []
+        else:
+            # Define DataFrame
+            cols = ['pid', 'experiment', 'num_trials', 'model_name', 'nLL', 'bic', 'params', 'params_labels', 'success', 'message', 'time']
+            df = pd.DataFrame(columns=cols)
+            pids_done = []
         
 
 
@@ -394,6 +404,15 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
         tic = time.perf_counter()
         print(f'participant {part_idx+1}, out of {sample_size}. Elapsed = {(tic - start)/60} minutes' )
 
+        #num_labels = len([name for name in part_data['trials'].keys() if name in ['label', 'congruent', 'incongruent', 'implausible']])
+        #num_generic = len([name for name in part_data['trials'].keys() if name not in ['label', 'congruent', 'incongruent', 'implausible']])
+        #num_trials = len(part_data['trials'].keys())
+        #penalty = num_labels * len(params_initial_guesses) / num_trials + num_generic * (len(params_initial_guesses) - 1) / num_trials
+
+        if participant in pids_done:
+            print(f'Participant {participant} done, passing...')
+            part_idx += 1
+            continue
         # Participant metadata
         part_experiment = part_data['experiment']
 
@@ -420,13 +439,23 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
             continue
             
         toc = time.perf_counter()
+
+        if 'prior_param' in fitting_list:
+            num_labels = len([name for name in part_data['trials'].keys() if name in ['label', 'congruent', 'incongruent', 'implausible']])
+            num_generic = len([name for name in part_data['trials'].keys() if name not in ['label', 'congruent', 'incongruent', 'implausible']])
+            num_trials = len(part_data['trials'].keys())
+            penalty = num_labels * len(minimize_out.x) / num_trials + num_generic * (len(minimize_out.x) - 1) / num_trials
+            bic = penalty * np.log(len(part_data['trials'].keys())) + 2 * minimize_out.fun
+        else:
+            bic = len(minimize_out.x) * np.log(len(part_data['trials'].keys())) + 2 * minimize_out.fun
+        
         out_data = [
             participant,
             part_experiment,
             len(part_data['trials'].keys()),
             internal_states_list[0],
             minimize_out.fun,
-            len(minimize_out.x) * np.log(len(part_data['trials'].keys())) + 2 * minimize_out.fun,
+            bic,
             minimize_out.x,
             internal_params_labels + action_params_labels + sensory_params_labels,  
             minimize_out.success,
@@ -448,15 +477,16 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
         # Add output to df
         df.loc[len(df.index)] = out_data
         # Save data every 5 participants and reset df
-        if part_idx % 25 == 0:
-            df.to_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit.csv')
+        if part_idx % 15 == 0:
+            print('Saving...')
+            df.to_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv', index=False)
 
         part_idx += 1 
 
     
     # Final save
     if save_data:
-        df.to_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit.csv')    
+        df.to_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv', index=False)    
 
         return df
 
@@ -577,3 +607,138 @@ def fit_participant(params_to_fit,
 
     return nLL
 
+
+
+def params_to_fit_importer(internal_state, 
+                           fitting_change=True, 
+                           fitting_attention=True,
+                           fitting_guess=True,
+                           fitting_strength=True,
+                           fitting_prior=True,
+                           random_increment=1):
+
+
+    params_dict = {
+        'smoothing': [
+            0,
+            (0, 2000),
+            ['smoothing']
+        ],
+        'decay_rate': [
+            2/3 + 1e-1*np.random.normal() * random_increment,
+            (0, 1),
+            ['decay_rate']
+        ],
+        'change_memory': [
+            1/2 + 1e-1*np.random.normal() * random_increment,
+            (1/10, 1),
+            ['change_memory']
+        ],
+        'ce_threshold' : [
+            1/5 + 1e-1*np.random.normal() * random_increment,
+            (1e-2, 1),
+            ['ce_threshold']
+        ],
+        'time_threshold' : [
+            15 + 2*np.random.normal() * random_increment, 
+            (1, 50),
+            ['time_threshold']
+        ],
+        'guess': [
+            0.1 + 1e-1*np.random.normal() * random_increment,
+            (1e-2, 0.4),
+            ['guess']
+        ],
+        'prior_param': [
+            0,
+            (0, 2000),
+            ['prior_param']
+        ]
+    }
+
+    params_initial_guesses = [] 
+    params_bounds = []
+    internal_params_labels = []
+    action_params_labels = []
+    sensory_params_labels = []
+    fitting_list = []
+    idx = 0
+
+    if internal_state[:6] == 'change':
+        
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+        
+        if fitting_attention:
+            params_initial_guesses.append(params_dict['decay_rate'][0])
+            params_bounds.append(params_dict['decay_rate'][1])
+            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
+            fitting_list.append('att')
+            idx += 1
+        
+        if fitting_change:
+            params_initial_guesses.append(params_dict['change_memory'][0])
+            params_bounds.append(params_dict['change_memory'][1])
+            sensory_params_labels.append(params_dict['change_memory'][2] + [idx])
+            fitting_list.append('cha')
+            idx += 1
+
+    elif internal_state[:3] == 'ces':
+        params_initial_guesses.append(params_dict['ce_threshold'])
+        params_bounds.append(params_dict['ce_threshold'][1])
+        internal_params_labels.append(params_dict['ce_threshold'][2] + [idx])
+        idx += 1
+
+        if fitting_strength:
+            params_initial_guesses.append(params_dict['time_threshold'])
+            params_bounds.append(params_dict['time_threshold'][1])
+            internal_params_labels.append(params_dict['time_threshold'][2] + [idx])
+            fitting_list.append('str')
+            idx += 1
+
+        if fitting_guess:
+            params_initial_guesses.append(params_dict['guess'])
+            params_bounds.append(params_dict['guess'][1])
+            internal_params_labels.append(params_dict['guess'][2] + [idx])
+            fitting_list.append('guess')
+            idx += 1
+
+
+    elif internal_state == 'LC_discrete':
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+
+
+    elif internal_state == 'LC_discrete_attention':
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+        
+        if fitting_attention:
+            params_initial_guesses.append(params_dict['decay_rate'][0])
+            params_bounds.append(params_dict['decay_rate'][1])
+            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
+            fitting_list.append('att')
+            idx += 1
+
+    elif internal_state == 'normative':
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+
+
+
+    if fitting_prior:
+        params_initial_guesses.append(params_dict['prior_param'][0])
+        params_bounds.append(params_dict['prior_param'][1])
+        internal_params_labels.append(params_dict['prior_param'][2] + [idx])
+        fitting_list.append('prior')
+
+
+    return (params_initial_guesses, params_bounds, internal_params_labels, action_params_labels, sensory_params_labels, fitting_list)

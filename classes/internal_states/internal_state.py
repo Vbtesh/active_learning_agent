@@ -11,7 +11,7 @@ from classes.action_states.experience_discrete_3D_AS import Experience_discrete_
 
 # Main Internal state class
 class Internal_state():
-    def __init__(self, N, K, prior_param, update_func, update_func_args=[]):
+    def __init__(self, N, K, update_func, update_func_args=[], prior_param=None):
         self._N = N
         self._n = 0
         self._K = K
@@ -166,9 +166,9 @@ class Internal_state():
 
 # Internal state using a discrete probability distribution to represent the external states
 class Discrete_IS(Internal_state):
-    def __init__(self, N, K, links, prior_param, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, smoothing=0):
+    def __init__(self, N, K, links, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, prior_param=None, smoothing=0):
 
-        super().__init__(N, K, prior_param, update_func, update_func_args=update_func_args)
+        super().__init__(N, K, update_func, update_func_args=update_func_args, prior_param=prior_param)
 
         self._num_links = len(links)
         self._dt = dt
@@ -301,21 +301,14 @@ class Discrete_IS(Internal_state):
             temp = temperature  
         else:
             prior_j = np.zeros(self._K**2 - self._K)
-            temp = 100
+            temp = 0
 
-        p_unnormalised = np.zeros((prior_j.size, self._L.size))
-        for i in np.arange(prior_j.size):
-            v = prior_j[i]
-            indices = np.arange(self._L.size)
+        distances = ((self._sample_space - prior_j)**2).sum(axis=1)**(1/2)
+        norm_distances = 1 - distances / distances.max()
+    
+        softmax_prior = self._softmax(norm_distances, temp)
 
-            # Computes an a array with negative absolute distance from the judgement
-            p_unnormalised[i,:] = self._L.size - np.abs(indices - np.argmin(np.abs(self._L - v)))
-
-        # Normalises the exponential of the distance times the temperature parameter
-        p = self._softmax(p_unnormalised, temp)
-
-        # Return the probability distribution and the entropy of the distribution
-        return p
+        return self._models_to_links(softmax_prior)
 
     # Background methods for likelihood and sampling for discrete distributions
     def _likelihood(self, log_likelihood):
@@ -426,7 +419,10 @@ class Discrete_IS(Internal_state):
 
     
     def _softmax(self, d, temp=1):
-        return np.exp(d/temp) / np.exp(d/temp).sum(axis=1).reshape((d.shape[0], 1))
+        if len(d.shape) == 1:
+            return np.exp(d*temp) / np.exp(d*temp).sum()
+        else:
+            return np.exp(d*temp) / np.exp(d*temp).sum(axis=1, keepdims=1)
 
 
 
@@ -434,8 +430,8 @@ class Discrete_IS(Internal_state):
 # Internal state using a continuous probability distribution to represent the external states
 ## Need to be able to express discrete probability values
 class Continuous_IS(Internal_state):
-    def __init__(self, N, K, links, prior_param, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, smoothing=0):
-        super().__init__(N, K, prior_param, update_func, update_func_args=update_func_args)
+    def __init__(self, N, K, links, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, prior_param=None , smoothing=0):
+        super().__init__(N, K, update_func, update_func_args=update_func_args, prior_param=prior_param)
 
         # Smoothing temperature
         self._smoothing_temp = smoothing

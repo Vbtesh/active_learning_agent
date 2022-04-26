@@ -58,9 +58,12 @@ class Experiment():
                 print('True model:', self.external_state.causal_vector, 'Posterior_judgement:', self.agent.final_judgement)
                 print('Final log likelihood:', self.agent.log_likelihood)
             print('Final judgement:', self.agent.final_judgement)
-            final_distance = np.concatenate(self.agent.MAP).reshape((self.agent._multi_is, 6))
-            print('Final distance:', np.sum((self.agent.final_judgement - final_distance)**2, axis=1)**(-1/2))
-
+            if self.agent._multi_is:
+                final_distance = np.concatenate(self.agent.MAP).reshape((self.agent._multi_is, 6))
+                print('Final distance:', np.sum((self.agent.final_judgement - final_distance)**2, axis=1)**(-1/2))
+            else:
+                final_distance = self.agent.MAP
+                print('Final distance:', np.sum((self.agent.final_judgement - final_distance)**2)**(-1/2))
 
     def run(self, console=False, reset=False):     
         self._i = 0

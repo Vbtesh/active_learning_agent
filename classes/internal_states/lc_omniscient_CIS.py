@@ -6,8 +6,8 @@ import numpy as np
 
 # Local computations continuous agent
 class Local_computations_omniscient_CIS(Continuous_IS):
-    def __init__(self, N, K, links, prior_param, dt, theta, sigma, generate_sample_space=True, sample_params=False, smoothing=0):
-        super().__init__(N, K, links, prior_param, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, smoothing=smoothing)
+    def __init__(self, N, K, links, dt, theta, sigma, generate_sample_space=True, sample_params=False, prior_param=None, smoothing=0):
+        super().__init__(N, K, links, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, prior_param=prior_param, smoothing=smoothing)
 
         # Sample parameter estimates
         if sample_params:
