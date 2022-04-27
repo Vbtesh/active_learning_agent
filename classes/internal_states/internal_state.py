@@ -205,14 +205,12 @@ class Discrete_IS(Internal_state):
     @property
     def posterior(self):
         posterior = self._likelihood(self._posterior_params)
-        if len(posterior.shape) == 1:
-            smoothed_posterior = self._links_to_models(self._smooth_softmax(self._models_to_links(posterior)))
-            #print('Diff:', np.sum(np.abs(posterior - smoothed_posterior)))
-            return smoothed_posterior
-        else:
-            smoothed_posterior = self._smooth_softmax(posterior)
-            #print('Diff:', np.sum(np.abs(posterior - smoothed_posterior)))
-            return smoothed_posterior
+        smoothed_posterior = self._smooth_softmax(posterior)
+        return smoothed_posterior
+
+    @property
+    def posterior_unsmoothed(self):
+        return self._likelihood(self._posterior_params)
 
     @property
     def posterior_over_links(self):
@@ -238,6 +236,10 @@ class Discrete_IS(Internal_state):
         return self._entropy(self.posterior_over_models)
 
     @property
+    def posterior_entropy_unsmoothed(self):
+        return self._entropy(self.posterior_unsmoothed)
+
+    @property
     def prior_entropy(self):
         return self._prior_entropy
 
@@ -261,7 +263,6 @@ class Discrete_IS(Internal_state):
             return self._smooth(posterior)
         else:
             return self._links_to_models(self._smooth(posterior))
-
 
     # Samples the posterior, the number of samples is given by the size parameter
     def posterior_sample(self, size=1, uniform=False, as_matrix=False):

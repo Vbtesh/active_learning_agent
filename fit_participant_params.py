@@ -1,8 +1,6 @@
 import numpy as np
 import pickle
 
-from classes.ou_network import OU_Network
-from methods.sample_space_methods import build_space
 from methods.model_fitting_utilities import fit_params_models_partlevel, params_to_fit_importer
 from methods.states_params_importer import import_states_params_asdict
 
@@ -38,7 +36,7 @@ models_to_fit = [
     'ces_no_strength_softmax'
 ]
 # Pick states to fit
-internal_states_list = ['normative']
+internal_states_list = ['LC_discrete_attention']
 action_states_list = ['experience_vao']
 sensory_states_list = ['omniscient']
 
@@ -52,7 +50,7 @@ fitting_guess = True
 fitting_strength = True
 
 # Prior
-fitting_prior = True
+fitting_prior = False
 
 random_increment = 1
 

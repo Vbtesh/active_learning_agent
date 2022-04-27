@@ -61,7 +61,7 @@ ground_truth = np.zeros(K**2 - K)  # Ground truth model generating the data: /!\
 
 # INTERNAL STATE parameters
 L = np.array([-1, -1/2, 0, 1/2, 1]) # Possible link values
-prior_param = 1 # Priors param: temperature for discrete and variance form continuous /!\ Depends on the trial /!\
+prior_param = 0 # Priors param: temperature for discrete and variance form continuous /!\ Depends on the trial /!\
 beta = 40 # Temperature for the softmax smothing function, will be fitted
 
 ## Attention based internal states

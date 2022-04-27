@@ -53,33 +53,39 @@ class Agent():
     # Core methods
     ## Learn
     def learn(self, external_state):
-        # Observe new external state
-        self._sensory_state.observe(external_state, self._internal_state)
-
-        # Update internal states
+        
         if self._multi_is:
             for is_idx in range(self._multi_is):
-                self._internal_state[is_idx].update(self._sensory_state, self.action_state)
+                # Observe new external state
+                self._sensory_state[is_idx].observe(external_state, self._internal_state[is_idx])
+                # Update internal states
+                self._internal_state[is_idx].update(self._sensory_state[is_idx], self.action_state)
         else:
+            # Observe new external state
+            self._sensory_state.observe(external_state, self._internal_state)
+            # Update internal states
             self._internal_state.update(self._sensory_state, self.action_state)
 
         self._n += 1
 
     ## Learn fit 
     def fit_learn(self, external_state):
-        # Observe new external state
-        self._sensory_state.observe(external_state, self._internal_state)
+        
 
-        # Update internal states
-        # Update internal states
         if self._multi_is:
             for is_idx in range(self._multi_is):
-                log_prob_judgement = self._internal_state[is_idx].update(self._sensory_state, self.action_state)
+                # Observe new external state
+                self._sensory_state[is_idx].observe(external_state, self._internal_state[is_idx])
+                # Update internal states
+                log_prob_judgement = self._internal_state[is_idx].update(self._sensory_state[is_idx], self.action_state)
                 self._log_likelihood[is_idx] += log_prob_judgement
 
             # Save LL history
             self._log_likelihood_history[self._n, :] = self._log_likelihood
         else:
+            # Observe new external state
+            self._sensory_state.observe(external_state, self._internal_state)
+            # Update internal states
             log_prob_judgement = self._internal_state.update(self._sensory_state, self.action_state)
             self._log_likelihood += log_prob_judgement
 

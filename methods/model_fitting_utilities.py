@@ -26,17 +26,24 @@ from methods.sample_space_methods import build_space_env
 ##### => Can be represented by df, easy to compute marginals: cols = [link1, link2, ..., link6, p(m)_0, p(m)_1, ..., p(m)_N]
 ### marginal over links
 
+## General wrapper for fit_participant
+"""
+Still need to integrate with fitted parameters and integrate saving tags to differentiate between prior and non prior versions
+
+Need to allow for 1 sensory state instance per internal state instance
+"""
 def fit_models(internal_states_list,                # List of internal states names as strings
                action_states_list,                  # List of action states names as strings
                sensory_states_list,                 # List of sensory states names as strings
                models_dict,                         # Dict of model object and parameters: can be changed in separate file                 
-               data_dict,                           # Dict of data for each participants/trial/experiment
+               data_dict,                           # Dict of data for each participants/trial/experiment     
+               use_fitted_params=False,             # Flag which recovers fitted params if true, else uses default params               
                build_space=True,                    # Boolean, set true for pre initialisation of fixed and large objects
-               fit_judgement=False,                 # List of internal states names as strings
-               reset_summary=False,                 # /!\ Data loss warning /!\ if true resets the summary, else, append to it 
-               reset_posteriors=False,              # /!\ Data loss warning /!\ if true reset the posteriors, else, append to it
                save_data=True,                      # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
+               save_posteriors=False,               # /!\ Performance warning /!\ if true, stores all posterior distributions over models
+               fit_judgement=False,                 # If true fit judgement
                console=False):                      # If true, log progress on the console
+
     # General loop
     ## Initialise general invariant parameters
     K = 3
@@ -50,30 +57,31 @@ def fit_models(internal_states_list,                # List of internal states na
     # If save data, generate frames
     if save_data:
         # Define DataFrame
-        cols = ['utid', 'pid', 'experiment', 'difficulty', 'scenario', 'model_name', 'ground_truth', 'posterior_map', 'posterior_judgement', 'prior_judgement', 'prior_entropy', 'posterior_entropy', 'model_specs']
+        cols = ['utid', 'pid', 'experiment', 'difficulty', 'scenario', 'model_name', 'ground_truth', 'posterior_map', 'posterior_judgement', 'prior_judgement', 'prior_entropy', 'posterior_entropy_unsmoothed', 'posterior_entropy', 'model_specs']
         df = pd.DataFrame(columns=cols)
         ## If summary data does not exist, create it
-        if not exists('./data/model_fitting_outputs/summary_data.csv') or reset_summary:
+        if not exists('./data/model_fitting_outputs/summary_data.csv'):
             pd.DataFrame(columns=cols).to_csv('./data/model_fitting_outputs/summary_data.csv', sep=';', index=False)
 
 
         # Posterior DataFrame
         # One per internal state
-        links_cols = [f'link_{i}' for i in range(K**2 - K)]
-        dfs_posteriors = []
-        for model in internal_states_list:
-            # Create files if they don't exist yet
-            if not exists(f'./data/model_fitting_outputs/{model}/posteriors.csv') or reset_posteriors:
-                dfs_p = pd.DataFrame(columns=links_cols, data=space_triple[0])
-                dfs_p.to_csv((f'./data/model_fitting_outputs/{model}/posteriors.csv'), index=False)
-            else:
-                dfs_p = pd.read_csv(f'./data/model_fitting_outputs/{model}/posteriors.csv')
+        if save_posteriors:
+            links_cols = [f'link_{i}' for i in range(K**2 - K)]
+            dfs_posteriors = []
+            for model in internal_states_list:
+                # Create files if they don't exist yet
+                if not exists(f'./data/model_fitting_outputs/{model}/posteriors.csv'):
+                    dfs_p = pd.DataFrame(columns=links_cols, data=space_triple[0])
+                    dfs_p.to_csv((f'./data/model_fitting_outputs/{model}/posteriors.csv'), index=False)
+                else:
+                    dfs_p = pd.read_csv(f'./data/model_fitting_outputs/{model}/posteriors.csv')
 
-            # Stores index and initialise empty dataframe of posteriors
-            posterior_index = dfs_p.index
-            dfs_posteriors.append(pd.DataFrame(index=posterior_index))
-            # Reset df
-            dfs_p = None
+                # Stores index and initialise empty dataframe of posteriors
+                posterior_index = dfs_p.index
+                dfs_posteriors.append(pd.DataFrame(index=posterior_index))
+                # Reset df
+                dfs_p = None
         
     # Count participant index
     sample_size = len(data_dict.keys())
@@ -86,7 +94,12 @@ def fit_models(internal_states_list,                # List of internal states na
         part_experiment = part_data['experiment']
         trials = part_data['trials']
 
+        if use_fitted_params:
+            fitted_params_dict = {} # NEED TO PROPERLY DEFINE IT HERE
+
         for trial_type, trial_data in trials.items():
+
+            
             
             # Extract data from participant's trial
             model_name = trial_data['name'][:-2]
@@ -113,54 +126,64 @@ def fit_models(internal_states_list,                # List of internal states na
             # Set up states
             ## Internal states
             internal_states = []   
+
             for model in internal_states_list:
+                internal_states_kwargs = models_dict['internal'][model]['params']['kwargs']
+                if use_fitted_params and model in fitted_params_dict[model].keys():
+                    for param_key, param_val in fitted_params_dict[model].items():
+                        if param_key in internal_states_kwargs.keys():
+                            internal_states_kwargs[param_key] = param_val
+
                 i_s = models_dict['internal'][model]['object'](N, K, 
                                                                *models_dict['internal'][model]['params']['args'],
-                                                               **models_dict['internal'][model]['params']['kwargs'],
-                                                               generate_sample_space = not build_space)
-
+                                                               **internal_states_kwargs,
+                                                               generate_sample_space = False)
                 # Initialse space according to build_space
-                if build_space:
-                    i_s.add_sample_space_env(space_triple)
-
+                i_s.add_sample_space_env(space_triple)
                 # Initialise prior distributions for all IS
                 i_s.initialise_prior_distribution(prior_judgement)
-
                 # Load data
                 i_s.load_judgement_data(judgement_data, posterior_judgement, fit_judgement)
-
                 internal_states.append(i_s)
-
 
             ## Action states
             action_states = []
             for model in action_states_list:
+                action_states_kwargs = models_dict['actions'][model]['params']['kwargs']
+                if use_fitted_params and model in fitted_params_dict[model].keys():
+                    for param_key, param_val in fitted_params_dict[model].items():
+                        if param_key in action_states_kwargs.keys():
+                            action_states_kwargs[param_key] = param_val
+                
                 a_s = models_dict['actions'][model]['object'](N, K, 
                                                              *models_dict['actions'][model]['params']['args'],
-                                                             **models_dict['actions'][model]['params']['kwargs'])
+                                                             **action_states_kwargs)
                 # Load action data
                 a_s.load_action_data(inters, inters_fit, data)
-
                 action_states.append(a_s)
-
             if len(action_states) == 1: # Must be true atm, multiple action states are not supported
                 action_states = action_states[0] 
 
             ## Sensory states
             sensory_states = []
             for model in sensory_states_list:
+                sensory_states_kwargs = models_dict['sensory'][model]['params']['kwargs']
+
+                if use_fitted_params and model in fitted_params_dict[model].keys():
+                    for param_key, param_val in fitted_params_dict.items():
+                        if param_key in sensory_states_kwargs.keys():
+                            sensory_states_kwargs[param_key] = param_val
+
                 sensory_s = models_dict['sensory'][model]['object'](N, K, 
                                                                     *models_dict['sensory'][model]['params']['args'],
-                                                                    **models_dict['sensory'][model]['params']['kwargs'])
-
+                                                                    **sensory_states_kwargs)
                 sensory_states.append(sensory_s)
-            
-            if len(sensory_states) == 1: # Must be true atm, multiple sensory states are not supported
-                sensory_states = sensory_states[0]
+
+
 
             # Create agent
             if len(internal_states) == 1:
-                agent = Agent(N, sensory_states, internal_states[0], action_states)
+                agent = Agent(N, sensory_states[0], internal_states[0], action_states)
             else:
                 agent = Agent(N, sensory_states, internal_states, action_states)
 
@@ -168,7 +191,8 @@ def fit_models(internal_states_list,                # List of internal states na
             experiment = Experiment(agent, external_state)
 
             # Fit data
-            experiment.fit(console=console)
+            experiment.fit(console=False)
+
 
             # If not saving data, continue here
             if not save_data:
@@ -182,33 +206,35 @@ def fit_models(internal_states_list,                # List of internal states na
             utid = f'{part_experiment[-1]}_{participant}_{model_name}_{difficulty}'
  
             for i, i_s in enumerate(internal_states):
-                # Posterior for each model
-                dfs_posteriors[i][utid] = i_s.posterior_over_models
-
-                # Every 5 participants, save data and reset dfs_posteriors
-                if part_idx % 5 == 0 or part_idx == sample_size - 1:
-                    df_old = pd.read_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/posteriors.csv')
-                    pd.concat([df_old, dfs_posteriors[i]], axis=1).to_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/posteriors.csv', index=False)
-                    # Reset dfs
-                    df_old = None  
-                    dfs_posteriors[i] = pd.DataFrame(index=posterior_index)
                 
-                # Posteriors for each judgement and each trial
-                ## Set up posterior dataframe for each trial and for each model
-                ## Stored in a special folder (TBD...)
-                judge_trial_idx, judge_link_idx = np.where(judgement_data == True)
-                df_posteriors_trial = pd.DataFrame(columns=links_cols, data=space_triple[0])
-
-                for j, j_idx in enumerate(judge_trial_idx):
-                    value = judgement_data[judge_trial_idx, judge_link_idx[j]][0]
-                    # Add judgements
-                    df_posteriors_trial[f'judgement_{j_idx}'] = df_posteriors_trial[f'link_{judge_link_idx[j]}'] == value
-                    # Add posteriors
-                    posterior_over_models = np.squeeze(i_s.posterior_over_models_byidx(j_idx))
-                    df_posteriors_trial[f'posterior_{j_idx}'] = posterior_over_models
+                if save_posteriors:
+                    # Posterior for each model
+                    dfs_posteriors[i][utid] = i_s.posterior_over_models
+                    # Every 5 participants, save data and reset dfs_posteriors
+                    if (part_idx % 5 == 0 or part_idx == sample_size - 1):
+                        df_old = pd.read_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/posteriors.csv')
+                        pd.concat([df_old, dfs_posteriors[i]], axis=1).to_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/posteriors.csv', index=False)
+                        # Reset dfs
+                        df_old = None  
+                        dfs_posteriors[i] = pd.DataFrame(index=posterior_index)
                 
-                # Save df directly
-                df_posteriors_trial.to_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/trials/{internal_states_list[i]}_{utid}.csv', index=False)
+
+                    # Posteriors for each judgement and each trial
+                    ## Set up posterior dataframe for each trial and for each model
+                    ## Stored in a special folder (TBD...)
+                    judge_trial_idx, judge_link_idx = np.where(judgement_data == True)
+                    df_posteriors_trial = pd.DataFrame(columns=links_cols, data=space_triple[0])
+
+                    for j, j_idx in enumerate(judge_trial_idx):
+                        value = judgement_data[judge_trial_idx, judge_link_idx[j]][0]
+                        # Add judgements
+                        df_posteriors_trial[f'judgement_{j_idx}'] = df_posteriors_trial[f'link_{judge_link_idx[j]}'] == value
+                        # Add posteriors
+                        posterior_over_models = np.squeeze(i_s.posterior_over_models_byidx(j_idx))
+                        df_posteriors_trial[f'posterior_{j_idx}'] = posterior_over_models
+
+                    # Save df directly
+                    df_posteriors_trial.to_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/trials/{internal_states_list[i]}_{utid}.csv', index=False)
                 
                 ## Generate summary dataframe entry
                 output = [
@@ -223,6 +249,7 @@ def fit_models(internal_states_list,                # List of internal states na
                     posterior_judgement,
                     prior_judgement,
                     i_s.prior_entropy, # Prior entropy
+                    i_s.posterior_entropy_unsmoothed, # Unsmoothed posterior entropy
                     i_s.posterior_entropy, # Posterior entropy
                     None # Model specs, for specific parametrisations (None if irrelevant)
                 ]
@@ -235,12 +262,9 @@ def fit_models(internal_states_list,                # List of internal states na
 
         part_idx += 1 
 
-        # If not saving data, continue here
-        if not save_data:
-            continue
         
         # Save data every 5 participants and reset df
-        if part_idx % 5 == 0:
+        if save_data and part_idx % 5 == 0:
             df_old = pd.read_csv('./data/model_fitting_outputs/summary_data.csv', sep=';')
             pd.concat([df_old, df], ignore_index=True).to_csv('./data/model_fitting_outputs/summary_data.csv', sep=';', index=False)
             # Resets dfs
@@ -403,11 +427,6 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
     for participant, part_data in data_dict.items():
         tic = time.perf_counter()
         print(f'participant {part_idx+1}, out of {sample_size}. Elapsed = {(tic - start)/60} minutes' )
-
-        #num_labels = len([name for name in part_data['trials'].keys() if name in ['label', 'congruent', 'incongruent', 'implausible']])
-        #num_generic = len([name for name in part_data['trials'].keys() if name not in ['label', 'congruent', 'incongruent', 'implausible']])
-        #num_trials = len(part_data['trials'].keys())
-        #penalty = num_labels * len(params_initial_guesses) / num_trials + num_generic * (len(params_initial_guesses) - 1) / num_trials
 
         if participant in pids_done:
             print(f'Participant {participant} done, passing...')
