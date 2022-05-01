@@ -31,7 +31,7 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         elif decay_type == 'sigmoid':
             self._power_update_coef = self._sigmoid_decay
 
-        self._decay_rate = decay_rate
+        self._decay_rate = decay_rate if decay_rate > 1e-1 else 1e-1
 
         self._last_action = None
         self._last_action_len = None

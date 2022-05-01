@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 
-from methods.model_fitting_utilities import fit_params_models_partlevel, params_to_fit_importer
+from methods.model_fitting_utilities import fit_params_models_grouplevel, params_to_fit_importer
 from methods.states_params_importer import import_states_params_asdict
 
 ## Import behavioural experiment
@@ -23,20 +23,17 @@ for part, data in modelling_data.items():
 
 
 models_to_fit = [
-    'LC_discrete_attention', # OK, prior OK
-    'change_d_obs_fk', # OK, prior OK
-    'change_d_obs_cause_effect', # OK
-    'change_d_obs_cause', # OK
-    'LC_discrete', # OK, prior OK
-    'normative', # OK, prior OK
-    'ces_strength', # OK
-    'ces_no_strength', # OK
-    'ces_strength_unrestricted',
-    'ces_strength_softmax',
-    'ces_no_strength_softmax'
+    'LC_discrete_attention', # w.o prior, w. prior
+    'change_d_obs_fk', # w.o prior, w. prior
+    'change_d_obs_cause_effect', 
+    'change_d_obs_cause',
+    'LC_discrete',  # w.o prior, w. prior
+    'normative',  # w.o prior, w. prior
+    'ces_strength', 
+    'ces_no_strength', 
 ]
 # Pick states to fit
-internal_states_list = ['ces_no_strength']
+internal_states_list = ['ces_strength']
 action_states_list = ['experience_vao']
 sensory_states_list = ['omniscient']
 
@@ -47,7 +44,7 @@ fitting_attention = True
 
 # CES
 fitting_guess = True
-fitting_strength = False
+fitting_strength = True
 
 # Prior
 fitting_prior = False
@@ -81,7 +78,7 @@ reset_posteriors = False
 # /!\ Data loss warning /!\
 
 # Run fitting function
-summary = fit_params_models_partlevel(params_initial_guesses,
+summary = fit_params_models_grouplevel(params_initial_guesses,
                                       params_bounds,
                                       internal_params_labels,
                                       action_params_labels,
@@ -91,4 +88,5 @@ summary = fit_params_models_partlevel(params_initial_guesses,
                                       sensory_states_list,
                                       models_dict,
                                       selected_data,
-                                      fitting_list)
+                                      fitting_list,
+                                      experiments)

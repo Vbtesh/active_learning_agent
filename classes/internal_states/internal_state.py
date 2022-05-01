@@ -237,7 +237,10 @@ class Discrete_IS(Internal_state):
 
     @property
     def posterior_entropy_unsmoothed(self):
-        return self._entropy(self.posterior_unsmoothed)
+        if len(self.posterior_unsmoothed.shape) == 1:
+            return self._entropy(self.posterior_unsmoothed)
+        else:
+            return self._entropy(self._links_to_models(self.posterior_unsmoothed))
 
     @property
     def prior_entropy(self):
@@ -351,12 +354,15 @@ class Discrete_IS(Internal_state):
             return dist
         
         if len(dist.shape) == 1:
-            dist = dist.reshape((1, dist.size))
-
-        exp_dist = np.exp(dist * self._smoothing_temp)
+            dist_n = dist.reshape((1, dist.size))
+        else:
+            dist_n = dist
+            
+        exp_dist = np.exp(dist_n * self._smoothing_temp)
         norm = exp_dist.sum(axis=1).reshape((exp_dist.shape[0], 1))
 
-        return exp_dist / norm
+        new_dist = (exp_dist / norm).reshape(dist.shape)
+        return new_dist
 
 
     def _entropy(self, distribution, custom=False):

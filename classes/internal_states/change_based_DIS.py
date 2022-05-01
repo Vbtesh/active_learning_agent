@@ -24,6 +24,7 @@ class LC_linear_change_DIS(Discrete_IS):
         self._c = 1 / prop_const
         self._sigma = lh_var**(1/2)
 
+
         if hypothesis == 'distance':
             self._calc_obs_stat = self._prop_distance
         elif hypothesis == 'cause_value':
@@ -38,7 +39,7 @@ class LC_linear_change_DIS(Discrete_IS):
         elif decay_type == 'sigmoid':
             self._power_update_coef = self._sigmoid_decay
 
-        self._decay_rate = decay_rate
+        self._decay_rate = decay_rate if decay_rate > 1e-1 else 1e-1
 
         self._last_action = None
         self._last_action_len = None

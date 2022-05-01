@@ -220,7 +220,7 @@ class causal_event_segmentation_DIS(Discrete_IS):
 
     def _generate_prior_from_judgement(self, prior_judgement, parameter):
 
-        if type(prior_judgement) == np.ndarray:
+        if type(prior_judgement) == np.ndarray and parameter > 0:
             prior_j = prior_judgement  
             param = parameter 
         else:

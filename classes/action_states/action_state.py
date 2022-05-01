@@ -52,9 +52,30 @@ class Action_state():
     # Core method, samples an action by computing action values and selecting one action according to the given policy
     def sample(self, external_state, sensory_state, internal_state):
         # If behaviour observer, return None, else if behaviour is random, return a random action
-        if self._behaviour == 'obs':
+        if self._behaviour == 'obs' and not self._realised:
             self._n += 1
             return None
+        elif self._behaviour == 'obs' and self._realised:
+            self._current_action = self.a_real
+            if type(self._current_action) == tuple:
+                self._variable_history[self._n] = self._current_action[0]
+
+            self._n += 1
+            return self._current_action
+        elif self._behaviour == 'random':
+            variable = np.random.choice([i for i in range(self._K)] + [None])
+            if not variable:
+                self._current_action = variable
+            else:
+                value = np.random.choice([-1, 1]) * np.random.choice(self._poss_actions)
+                self._current_action = [variable, value]
+
+            if type(self._current_action) == tuple:
+                self._variable_history[self._n] = self._current_action[0]
+
+            self._n += 1
+            return self._current_action
+
         elif internal_state.posterior_entropy < self._epsilon and self._n > 0.33*self._N:
             self._n += 1
             return None
@@ -150,6 +171,16 @@ class Action_state():
 
         self._realised = True
 
+    # Load data
+    ## Only works with run
+    def load_action_plan(self, actions, variables_values):
+        self._A = actions
+
+        self._A_real_indices = self._split_action_array(self._A)
+        
+        self._X = variables_values
+
+        self._realised = True
         
     # Rollback action state
     ## Used mostly for action selection

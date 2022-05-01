@@ -80,13 +80,15 @@ class Experiment():
             self._n = 0
 
             for n in range(self._N):
-                a = self.agent.act(self.external_state)
+                a = self.agent.a
                 x = self.external_state.run(interventions=a)
                 self.agent.learn(self.external_state)
-                #self.agent.learn(self.external_state, intervention=a)
+            
+                _ = self.agent.act(self.external_state)
 
-                #print('Model n:', agent.model._n)
-                #print('external_state n:', external_state._n)
+                self._n += 1
+
+                
 
                 if n % 10 == 0 and console:
                     print('Iter:', n)
@@ -95,16 +97,11 @@ class Experiment():
                     #print(np.around(agent.model.posterior_links, 2))
 
 
-                self._n += 1
-
             if console:
                 print('Iter:', n)
                 print('True model:', self.external_state.causal_vector, 'Final MAP:', self.agent.MAP)
 
-            if self.agent._multi_is:
-                self._entropy_history[i, :, :] = self.agent.entropy_history
-            else:
-                self._entropy_history[i, :] = self.agent.entropy_history
+
             self._i += 1
 
             

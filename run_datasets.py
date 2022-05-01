@@ -6,6 +6,7 @@ import json
 
 from methods.model_fitting_utilities import fit_models
 from methods.states_params_importer import import_states_params_asdict
+from methods.action_plans import generate_action_plan
 
 
 ## Import behavioural experiment
@@ -28,15 +29,16 @@ for part, data in modelling_data.items():
 print(len(selected_data.keys()))
 
 
-for part, part_data in selected_data.items():
-    print(f'|_ {part}')
-    for m_type in part_data['trials'].keys():
-        print(f'    |_ {m_type}')
+#for part, part_data in selected_data.items():
+#    print(f'|_ {part}')
+#    for m_type in part_data['trials'].keys():
+#        print(f'    |_ {m_type}')
 
 
 models_dict = import_states_params_asdict()
 
 use_fitted_parameters = True
+
 if use_fitted_parameters:
     with open('./data/params_fitting_outputs/fitted_params.json', 'r') as infile:
         use_fitted_parameters = json.load(infile)
@@ -55,6 +57,11 @@ save_data = True
 # /!\ Data loss warning /!\
 console = False
 
+# Action plan
+use_action_plan = True
+
+# Add tag at end of file
+tag = '_rolled'
 
 # Fit models 
 fit_models(internal_states_list,
@@ -62,6 +69,9 @@ fit_models(internal_states_list,
            sensory_states_list,
            models_dict,
            selected_data,
+           fit_or_run='run',
+           use_action_plan=use_action_plan,
            use_fitted_params=use_fitted_parameters,
            save_data=save_data,
-           console=console)
+           console=console,
+           file_tag='')
