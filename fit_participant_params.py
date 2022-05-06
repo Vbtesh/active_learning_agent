@@ -1,24 +1,27 @@
 import numpy as np
 import pickle
 
-from methods.model_fitting_utilities import fit_params_models_partlevel, params_to_fit_importer
-from methods.states_params_importer import import_states_params_asdict
+from methods.model_fitting_utilities import fit_params_models_partlevel
+from methods.states_params_importer import import_states_params_asdict, params_to_fit_importer
+
 
 ## Import behavioural experiment
 with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:
     modelling_data = pickle.load(inFile)
 
-# Choose experiments
-experiments = ['experiment_1', 'experiment_2', 'experiment_3']
+
 
 # Select participans
 selected_data = {}
 pick_interval = 1
 idx = 0
+
+# Choose experiments
+experiments = ['experiment_1', 'experiment_2', 'experiment_3']
+
 for part, data in modelling_data.items():
     if data['experiment'] in experiments and idx % pick_interval == 0:
         selected_data[part] = data
-    
     idx += 1
 
 
@@ -35,25 +38,21 @@ models_to_fit = [
     'ces_strength_softmax',
     'ces_no_strength_softmax'
 ]
+
 # Pick states to fit
-internal_states_list = ['ces_no_strength']
+internal_states_list = ['change_d_obs_fk']
 action_states_list = ['experience_vao']
 sensory_states_list = ['omniscient']
-
 
 fitting_softmax = True
 fitting_change = True
 fitting_attention = True
-
 # CES
 fitting_guess = True
 fitting_strength = False
-
 # Prior
 fitting_prior = False
-
 random_increment = 1
-
 params_to_fit_tuple = params_to_fit_importer(internal_states_list[0], 
                                              fitting_change=fitting_change,
                                              fitting_attention=fitting_attention,
@@ -67,7 +66,6 @@ internal_params_labels = params_to_fit_tuple[2]
 action_params_labels = params_to_fit_tuple[3]
 sensory_params_labels = params_to_fit_tuple[4]
 fitting_list = params_to_fit_tuple[5]
-
 
 print(f'Fitting: {internal_states_list[0]}...')
 print(f'Parameters: {internal_params_labels + action_params_labels + sensory_params_labels}')
@@ -92,3 +90,5 @@ summary = fit_params_models_partlevel(params_initial_guesses,
                                       models_dict,
                                       selected_data,
                                       fitting_list)
+
+    

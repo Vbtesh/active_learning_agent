@@ -122,6 +122,143 @@ experience_measure = 'information' # Can be "information" or "change"
 ### Action selection policy
 discrete_policy_funcs = discrete_policy_init()
 
+
+
+#
+def params_to_fit_importer(internal_state, 
+                           fitting_change=True, 
+                           fitting_attention=True,
+                           fitting_guess=True,
+                           fitting_strength=True,
+                           fitting_prior=True,
+                           random_increment=1):
+
+
+    params_dict = {
+        'smoothing': [
+            1,
+            (0, 100),
+            ['smoothing']
+        ],
+        'decay_rate': [
+            2/3 + 1e-1*np.random.normal() * random_increment,
+            (0, 1),
+            ['decay_rate']
+        ],
+        'change_memory': [
+            1/2 + 1e-1*np.random.normal() * random_increment,
+            (1/10, 1),
+            ['change_memory']
+        ],
+        'ce_threshold' : [
+            1/5 + 1e-1*np.random.normal() * random_increment,
+            (1e-2, 1),
+            ['ce_threshold']
+        ],
+        'time_threshold' : [
+            15 + 2*np.random.normal() * random_increment, 
+            (1, 50),
+            ['time_threshold']
+        ],
+        'guess': [
+            0.1 + 1e-1*np.random.normal() * random_increment,
+            (1e-2, 0.7),
+            ['guess']
+        ],
+        'prior_param': [
+            1 + 1e-1*np.random.normal() * random_increment,
+            (0, 500),
+            ['prior_param']
+        ]
+    }
+
+    params_initial_guesses = [] 
+    params_bounds = []
+    internal_params_labels = []
+    action_params_labels = []
+    sensory_params_labels = []
+    fitting_list = []
+    idx = 0
+
+    if internal_state[:6] == 'change':
+        
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+        
+        if fitting_attention:
+            params_initial_guesses.append(params_dict['decay_rate'][0])
+            params_bounds.append(params_dict['decay_rate'][1])
+            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
+            fitting_list.append('att')
+            idx += 1
+        
+        if fitting_change:
+            params_initial_guesses.append(params_dict['change_memory'][0])
+            params_bounds.append(params_dict['change_memory'][1])
+            sensory_params_labels.append(params_dict['change_memory'][2] + [idx])
+            fitting_list.append('cha')
+            idx += 1
+
+    elif internal_state[:3] == 'ces':
+        params_initial_guesses.append(params_dict['ce_threshold'][0])
+        params_bounds.append(params_dict['ce_threshold'][1])
+        internal_params_labels.append(params_dict['ce_threshold'][2] + [idx])
+        idx += 1
+
+        if fitting_strength:
+            params_initial_guesses.append(params_dict['time_threshold'][0])
+            params_bounds.append(params_dict['time_threshold'][1])
+            internal_params_labels.append(params_dict['time_threshold'][2] + [idx])
+            fitting_list.append('str')
+            idx += 1
+
+        if fitting_guess:
+            params_initial_guesses.append(params_dict['guess'][0])
+            params_bounds.append(params_dict['guess'][1])
+            internal_params_labels.append(params_dict['guess'][2] + [idx])
+            fitting_list.append('guess')
+            idx += 1
+
+
+    elif internal_state == 'LC_discrete':
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+
+
+    elif internal_state == 'LC_discrete_att':
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+        
+        if fitting_attention:
+            params_initial_guesses.append(params_dict['decay_rate'][0])
+            params_bounds.append(params_dict['decay_rate'][1])
+            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
+            fitting_list.append('att')
+            idx += 1
+
+    elif internal_state == 'normative':
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+
+
+
+    if fitting_prior:
+        params_initial_guesses.append(params_dict['prior_param'][0])
+        params_bounds.append(params_dict['prior_param'][1])
+        internal_params_labels.append(params_dict['prior_param'][2] + [idx])
+        fitting_list.append('prior')
+
+
+    return (params_initial_guesses, params_bounds, internal_params_labels, action_params_labels, sensory_params_labels, fitting_list)
+
 # All but trial dependent stuff: Number of datapoint, Number of variables
 def import_states_params_asdict():
     params_dict = {
@@ -194,6 +331,23 @@ def import_states_params_asdict():
                     }
                 }
             },
+            'LC_discrete_att': {
+                'object': Local_computations_interfocus_DIS,
+                'params': {
+                    'args': [
+                        L, 
+                        dt, 
+                        theta,
+                        sigma,
+                        'exponential'  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'prior_param': prior_param,
+                        'smoothing': beta
+                    }
+                }
+            },
             'change_d_obs_fk': {
                 'object': LC_linear_change_DIS,
                 'params': {
@@ -210,8 +364,7 @@ def import_states_params_asdict():
                         'prior_param': prior_param,
                         'smoothing': beta
                     }
-                }
-                
+                }   
             },
             'change_d_obs_cause_effect': {
                 'object': LC_linear_change_DIS,
@@ -259,6 +412,79 @@ def import_states_params_asdict():
                         prop_constant,
                         'distance',
                         decay_type  
+                    ],
+                    'kwargs': {
+                        'lh_var': samples_variance,
+                        'decay_rate': decay_rate,
+                        'prior_param': prior_param,
+                        'smoothing': beta
+                    }
+                }    
+            },
+            'change_obs_fk': {
+                'object': LC_linear_change_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        prop_constant,
+                        'full_knowledge',
+                        'exponential'  
+                    ],
+                    'kwargs': {
+                        'lh_var': samples_variance,
+                        'decay_rate': decay_rate,
+                        'prior_param': prior_param,
+                        'smoothing': beta
+                    }
+                }   
+            },
+            'change_obs_cause_effect': {
+                'object': LC_linear_change_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        prop_constant,
+                        'cause_effect_values',
+                        'exponential' 
+                    ],
+                    'kwargs': {
+                        'lh_var': samples_variance,
+                        'decay_rate': decay_rate,
+                        'prior_param': prior_param,
+                        'smoothing': beta
+                    }
+                }   
+            },
+            'change_obs_cause': {
+                'object': LC_linear_change_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        prop_constant,
+                        'cause_value',
+                        'exponential'  
+                    ],
+                    'kwargs': {
+                        'lh_var': samples_variance,
+                        'decay_rate': decay_rate,
+                        'prior_param': prior_param,
+                        'smoothing': beta
+                    }
+                }
+                
+            },
+            'change_obs_dist': {
+                'object': LC_linear_change_DIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        prop_constant,
+                        'distance',
+                        'exponential'  
                     ],
                     'kwargs': {
                         'lh_var': samples_variance,

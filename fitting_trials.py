@@ -37,7 +37,7 @@ states_dict = import_states_asdict()
 models_dict = import_states_params_asdict()
 
 
-internal_states_list = ['change_d_obs_fk']
+internal_states_list = ['LC_discrete_att']
 action_states_list = ['experience_vao']
 sensory_states_list = ['omniscient']
 external_state = OU_Network

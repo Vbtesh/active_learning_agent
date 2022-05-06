@@ -28,11 +28,6 @@ for part, data in modelling_data.items():
 print(len(selected_data.keys()))
 
 
-for part, part_data in selected_data.items():
-    print(f'|_ {part}')
-    for m_type in part_data['trials'].keys():
-        print(f'    |_ {m_type}')
-
 
 models_dict = import_states_params_asdict()
 
@@ -42,8 +37,9 @@ if use_fitted_parameters:
         use_fitted_parameters = json.load(infile)
 
     internal_states_list = list(use_fitted_parameters[list(use_fitted_parameters.keys())[0]].keys())
+    #internal_states_list = [model for model in internal_states_list if model[:3] == 'ces']
 else:
-    internal_states_list = ['change_d_obs_fk']
+    internal_states_list = ['change_obs_fk']
 action_states_list = ['experience_vao']
 sensory_states_list = ['omniscient' for _ in internal_states_list]
 
@@ -55,7 +51,9 @@ save_data = True
 # /!\ Data loss warning /!\
 console = False
 
+tag='_current'
 
+print(f'File tag: {tag}')
 # Fit models 
 fit_models(internal_states_list,
            action_states_list,
@@ -64,4 +62,5 @@ fit_models(internal_states_list,
            selected_data,
            use_fitted_params=use_fitted_parameters,
            save_data=save_data,
-           console=console)
+           console=console,
+           file_tag=tag)

@@ -29,11 +29,7 @@ from methods.sample_space_methods import build_space_env
 ### marginal over links
 
 ## General wrapper for fit_participant
-"""
-Still need to integrate with fitted parameters and integrate saving tags to differentiate between prior and non prior versions
 
-Need to allow for 1 sensory state instance per internal state instance
-"""
 def fit_models(internal_states_list,                # List of internal states names as strings
                action_states_list,                  # List of action states names as strings
                sensory_states_list,                 # List of sensory states names as strings
@@ -119,7 +115,10 @@ def fit_models(internal_states_list,                # List of internal states na
             K = data.shape[1] # Number of variables
 
             if use_action_plan:
-                action_plan = generate_action_plan(N, K)
+                action_plan = generate_action_plan(N, K, time=use_action_plan)
+                acting_len = (1 - np.isnan(action_plan[0])).mean()
+            else:
+                action_plan = None
 
             # Set up OU netowrk 
             external_state = models_dict['external']['OU_Network']['object'](N, K, 
@@ -142,9 +141,9 @@ def fit_models(internal_states_list,                # List of internal states na
                     model = model_tags.split('_&_')[0]
 
                 ## Internal States
-                internal_states_kwargs = models_dict['internal'][model]['params']['kwargs']
+                internal_states_kwargs = models_dict['internal'][model]['params']['kwargs'].copy()
                 ## Sensory States
-                sensory_states_kwargs = models_dict['sensory'][sensory_states_list[i]]['params']['kwargs']
+                sensory_states_kwargs = models_dict['sensory'][sensory_states_list[i]]['params']['kwargs'].copy()
 
                 # Setup fitted params
                 if use_fitted_params and model_tags in fitted_params_dict.keys():
@@ -182,7 +181,7 @@ def fit_models(internal_states_list,                # List of internal states na
             ## Action states
             action_states = []
             for model in action_states_list:
-                action_states_kwargs = models_dict['actions'][model]['params']['kwargs']
+                action_states_kwargs = models_dict['actions'][model]['params']['kwargs'].copy()
                 if use_fitted_params and model in fitted_params_dict.keys():
                     for param_key, param_val in fitted_params_dict[model].items():
                         if param_key in action_states_kwargs.keys():
@@ -197,6 +196,10 @@ def fit_models(internal_states_list,                # List of internal states na
                 else:
                     if action_plan:
                         a_s.load_action_plan(*action_plan)
+                    else:
+                        # If no action plan, behaviour is random
+                        a_s._behaviour = 'random'
+                        # DOES NOT HAVE TO BE
 
                 action_states.append(a_s)
 
@@ -415,20 +418,27 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
                                 data_dict,
                                 fitting_list,                           # Dict of data for each participants/trial/experiment
                                 build_space=True,                    # Boolean, set true for pre initialisation of fixed and large objects
-                                save_data=True):                     # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
+                                save_data=True,                       # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
+                                outfile_path=None):                     
+    
+    
     # General loop
     ## Initialise general invariant parameters
-    K = 3
-    links = np.array([-1, -0.5, 0, 0.5, 1]) # Possible link values
 
     # Build internal sample space
     if build_space:
-        space_triple = build_space_env(K, links)
+        space_triple = build_space_env()
+
+    # Define outfile_path
+    if not outfile_path:
+        out_file = f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv'
+    else:
+        out_file = outfile_path
 
     # If save data, generate frames
     if save_data:
-        if exists(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv'):
-            df = pd.read_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv')
+        if exists(out_file):
+            df = pd.read_csv(out_file)
             if 'Unnamed: 0' in df.columns:
                 df = df.drop(['Unnamed: 0'], axis=1)
             if not df.empty:
@@ -440,6 +450,7 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
             cols = ['pid', 'experiment', 'num_trials', 'model_name', 'nLL', 'bic', 'params', 'params_labels', 'success', 'message', 'time']
             df = pd.DataFrame(columns=cols)
             pids_done = []
+            df.to_csv(out_file, index=False)
         
 
 
@@ -472,7 +483,12 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
             space_triple 
         )
 
-        minimize_out = minimize(fit_participant, x_in, method='Powell', options={'ftol':1e-3}, args=params_fixed, bounds=params_bounds)
+        minimize_out = minimize(fit_participant, 
+                                x_in, 
+                                method='Powell', 
+                                options={'xtol':1e-3, 'ftol':1e-3}, 
+                                args=params_fixed, 
+                                bounds=params_bounds)
 
         # Extract relevant data
 
@@ -505,34 +521,22 @@ def fit_params_models_partlevel(params_initial_guesses,              # Initial g
             minimize_out.message,
             (toc - tic) / 60
         ]
-        #out_data = [
-        #    participant,
-        #    part_experiment,
-        #    len(part_data['trials'].keys()),
-        #    internal_states_list[0],
-        #    'ph',
-        #    internal_params_labels,  
-        #    'ph',
-        #    'ph',
-        #    'ph',
-        #    (toc - tic) / 60
-        #]
-        # Add output to df
+
         print(minimize_out.x)
         print(minimize_out.fun)
+
         df.loc[len(df.index)] = out_data
         # Save data every 5 participants and reset df
         if part_idx % 15 == 0:
             print('Saving...')
-            df.to_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv', index=False)
+            df.to_csv(out_file, index=False)
 
         part_idx += 1 
 
     
     # Final save
     if save_data:
-        df.to_csv(f'./data/params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv', index=False)    
-
+        df.to_csv(out_file, index=False)    
         return df
 
 
@@ -654,141 +658,6 @@ def fit_participant(params_to_fit,
 
 
 
-def params_to_fit_importer(internal_state, 
-                           fitting_change=True, 
-                           fitting_attention=True,
-                           fitting_guess=True,
-                           fitting_strength=True,
-                           fitting_prior=True,
-                           random_increment=1):
-
-
-    params_dict = {
-        'smoothing': [
-            1,
-            (0, 10),
-            ['smoothing']
-        ],
-        'decay_rate': [
-            2/3 + 1e-1*np.random.normal() * random_increment,
-            (0, 1),
-            ['decay_rate']
-        ],
-        'change_memory': [
-            1/2 + 1e-1*np.random.normal() * random_increment,
-            (1/10, 1),
-            ['change_memory']
-        ],
-        'ce_threshold' : [
-            1/5 + 1e-1*np.random.normal() * random_increment,
-            (1e-2, 1),
-            ['ce_threshold']
-        ],
-        'time_threshold' : [
-            15 + 2*np.random.normal() * random_increment, 
-            (1, 50),
-            ['time_threshold']
-        ],
-        'guess': [
-            0.1 + 1e-1*np.random.normal() * random_increment,
-            (1e-2, 0.7),
-            ['guess']
-        ],
-        'prior_param': [
-            1 + 1e-1*np.random.normal() * random_increment,
-            (0, 500),
-            ['prior_param']
-        ]
-    }
-
-    params_initial_guesses = [] 
-    params_bounds = []
-    internal_params_labels = []
-    action_params_labels = []
-    sensory_params_labels = []
-    fitting_list = []
-    idx = 0
-
-    if internal_state[:6] == 'change':
-        
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-        
-        if fitting_attention:
-            params_initial_guesses.append(params_dict['decay_rate'][0])
-            params_bounds.append(params_dict['decay_rate'][1])
-            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
-            fitting_list.append('att')
-            idx += 1
-        
-        if fitting_change:
-            params_initial_guesses.append(params_dict['change_memory'][0])
-            params_bounds.append(params_dict['change_memory'][1])
-            sensory_params_labels.append(params_dict['change_memory'][2] + [idx])
-            fitting_list.append('cha')
-            idx += 1
-
-    elif internal_state[:3] == 'ces':
-        params_initial_guesses.append(params_dict['ce_threshold'][0])
-        params_bounds.append(params_dict['ce_threshold'][1])
-        internal_params_labels.append(params_dict['ce_threshold'][2] + [idx])
-        idx += 1
-
-        if fitting_strength:
-            params_initial_guesses.append(params_dict['time_threshold'][0])
-            params_bounds.append(params_dict['time_threshold'][1])
-            internal_params_labels.append(params_dict['time_threshold'][2] + [idx])
-            fitting_list.append('str')
-            idx += 1
-
-        if fitting_guess:
-            params_initial_guesses.append(params_dict['guess'][0])
-            params_bounds.append(params_dict['guess'][1])
-            internal_params_labels.append(params_dict['guess'][2] + [idx])
-            fitting_list.append('guess')
-            idx += 1
-
-
-    elif internal_state == 'LC_discrete':
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-
-
-    elif internal_state == 'LC_discrete_attention':
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-        
-        if fitting_attention:
-            params_initial_guesses.append(params_dict['decay_rate'][0])
-            params_bounds.append(params_dict['decay_rate'][1])
-            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
-            fitting_list.append('att')
-            idx += 1
-
-    elif internal_state == 'normative':
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-
-
-
-    if fitting_prior:
-        params_initial_guesses.append(params_dict['prior_param'][0])
-        params_bounds.append(params_dict['prior_param'][1])
-        internal_params_labels.append(params_dict['prior_param'][2] + [idx])
-        fitting_list.append('prior')
-
-
-    return (params_initial_guesses, params_bounds, internal_params_labels, action_params_labels, sensory_params_labels, fitting_list)
-
-
 
 ## General wrapper for fit_participant
 def fit_params_models_grouplevel(params_initial_guesses,              # Initial guesses for params to fit
@@ -804,20 +673,26 @@ def fit_params_models_grouplevel(params_initial_guesses,              # Initial 
                                  fitting_list,                        # Dict of data for each participants/trial/experiment
                                  experiment,
                                  build_space=True,                    # Boolean, set true for pre initialisation of fixed and large objects
-                                 save_data=True):                     # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
+                                 save_data=True,
+                                 outfile_path=None):                     # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
     # General loop
     ## Initialise general invariant parameters
-    K = 3
-    links = np.array([-1, -0.5, 0, 0.5, 1]) # Possible link values
+
+    # Define outfile_path
+    if not outfile_path:
+        out_file = f'./data/group_params_fitting_outputs/{internal_states_list[0]}/summary_fit_{"_".join(fitting_list)}.csv'
+    else:
+        out_file = outfile_path
+
 
     # Build internal sample space
     if build_space:
-        space_triple = build_space_env(K, links)
+        space_triple = build_space_env()
 
     # If save data, generate frames
     if save_data:
-        if exists(f'./data/group_params_fitting_outputs/{internal_states_list[0]}_summary_fit_{"_".join(fitting_list)}.csv'):
-            df = pd.read_csv(f'./data/group_params_fitting_outputs/{internal_states_list[0]}_summary_fit_{"_".join(fitting_list)}.csv')
+        if exists(out_file):
+            df = pd.read_csv(out_file)
             if 'Unnamed: 0' in df.columns:
                 df = df.drop(['Unnamed: 0'], axis=1)
         else:
@@ -846,7 +721,12 @@ def fit_params_models_grouplevel(params_initial_guesses,              # Initial 
         sensory_params_labels,
         space_triple 
     )
-    minimize_out = minimize(fit_group, x_in, method='Powell', options={'ftol':1e-3}, args=params_fixed, bounds=params_bounds)
+    minimize_out = minimize(fit_group, 
+                            x_in, 
+                            method='Powell', 
+                            options={'ftol':1e-2}, 
+                            args=params_fixed, 
+                            bounds=params_bounds)
     # Extract relevant data
     # If not saving data, continue here
         
@@ -878,8 +758,7 @@ def fit_params_models_grouplevel(params_initial_guesses,              # Initial 
     
     # Final save
     if save_data:
-        df.to_csv(f'./data/group_params_fitting_outputs/{internal_states_list[0]}_summary_fit_{"_".join(fitting_list)}.csv', index=False)    
-
+        df.to_csv(out_file, index=False)    
         return df
 
 

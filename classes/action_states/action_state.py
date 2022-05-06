@@ -63,12 +63,12 @@ class Action_state():
             self._n += 1
             return self._current_action
         elif self._behaviour == 'random':
-            variable = np.random.choice([i for i in range(self._K)] + [None])
+            variable = np.random.choice([i+1 for i in range(self._K)] + [None])
             if not variable:
                 self._current_action = variable
             else:
                 value = np.random.choice([-1, 1]) * np.random.choice(self._poss_actions)
-                self._current_action = [variable, value]
+                self._current_action = (variable-1, value)
 
             if type(self._current_action) == tuple:
                 self._variable_history[self._n] = self._current_action[0]

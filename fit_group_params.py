@@ -1,8 +1,8 @@
 import numpy as np
 import pickle
 
-from methods.model_fitting_utilities import fit_params_models_grouplevel, params_to_fit_importer
-from methods.states_params_importer import import_states_params_asdict
+from methods.model_fitting_utilities import fit_params_models_grouplevel
+from methods.states_params_importer import import_states_params_asdict, params_to_fit_importer
 
 ## Import behavioural experiment
 with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:

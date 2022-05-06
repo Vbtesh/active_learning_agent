@@ -1,6 +1,6 @@
 import numpy as np
 
-def build_space_env(K, links):
+def build_space_env(K=3, links=np.array([-1, -0.5, 0, 0.5, 1])):
     links_indexed = np.arange(links.size)
 
     main_space = build_space(K, links)
@@ -11,6 +11,7 @@ def build_space_env(K, links):
 
 
 def build_space(K, links, as_matrix=False):
+
         a = links 
         c = len(links)
         s = K**2 - K

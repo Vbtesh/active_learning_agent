@@ -37,10 +37,11 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         self._last_action_len = None
         self._last_instant_action = None
         self._last_real_action = None
+        self._last_action_idx = 0
+        self._last_action_end = None
 
         self._power_update_coef_history = np.zeros(self._N)
 
-        
 
     def _update_rule(self, sensory_state, action_state):
         intervention = action_state.a
@@ -59,15 +60,11 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                 self._last_action_len = action_state.a_len_real      
                 # Reset last action index
                 self._last_action_idx = 0
+                self._last_action_end = None
 
                 self._last_action = action_state.a_real
 
-                if not intervention:
-                    self._last_action_idx += 1
-                    self._last_obs = obs
-                    self._last_instant_action = action_state.a_real
-                    return self._posterior_params
-
+        
             elif self._last_action and action_state.a_real:
                 if not self._last_instant_action:
                     # CHANGE OF ACTION
@@ -75,20 +72,14 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                     self._last_action_len = action_state.a_len_real      
                     # Reset last action index
                     self._last_action_idx = 0
+                    self._last_action_end = None
 
                     self._last_action = action_state.a_real
 
-                    if not intervention:
-                        self._last_action_idx += 1
-                        self._last_obs = obs
-                        self._last_instant_action = action_state.a_real
-                        return self._posterior_params
-                else:
-                    if not intervention:
-                        self._last_action_idx += 1
-                        self._last_obs = obs
-                        self._last_instant_action = action_state.a_real
-                        return self._posterior_params
+            elif self._last_instant_action and not action_state.a_real:
+                # Stopped acting
+                self._last_action_end = 1               
+    
         else:
             # If generating data
             if (not self._last_action and not intervention) or self._n == 0:
@@ -100,6 +91,7 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                 self._last_action_len = action_state.a_len     
                 # Reset last action index
                 self._last_action_idx = 0
+                self._last_action_end = None
 
                 self._last_action = intervention
                 self._last_instant_action = intervention
@@ -109,9 +101,14 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                     self._last_action_len = action_state.a_len     
                     # Reset last action index
                     self._last_action_idx = 0
+                    self._last_action_end = None
 
                     self._last_action = intervention
                     self._last_instant_action = intervention
+
+            elif self._last_instant_action and not intervention:
+                # Stopped acting
+                self._last_action_end = 1  
 
     
         # Logic for updating
@@ -147,9 +144,14 @@ class Local_computations_interfocus_DIS(Discrete_IS):
 
         self._last_obs = obs
         self._last_action_idx += 1
+
         if action_state.realised:
+            if not self._last_instant_action and not action_state.a_real:
+                self._last_action_end += 1
             self._last_instant_action = action_state.a_real
         else:
+            if not self._last_instant_action and not intervention:
+                self._last_action_end += 1
             self._last_instant_action = intervention
 
         return log_posterior
@@ -163,7 +165,10 @@ class Local_computations_interfocus_DIS(Discrete_IS):
     # Power update coefficients
     ## Exponential decay
     def _exponential_decay(self, delay):
-        return self._decay_rate**self._last_action_idx
+        if not self._last_action_end:
+            return 1
+        else:
+            return self._decay_rate**self._last_action_end
 
     ## Sigmoid decay
     def _sigmoid_decay(self, delay):

@@ -44,6 +44,7 @@ if use_fitted_parameters:
         use_fitted_parameters = json.load(infile)
 
     internal_states_list = list(use_fitted_parameters[list(use_fitted_parameters.keys())[0]].keys())
+    #internal_states_list = [model for model in internal_states_list if 'LC_discrete_att' in model]
 else:
     internal_states_list = ['change_d_obs_fk']
 action_states_list = ['experience_vao']
@@ -58,10 +59,12 @@ save_data = True
 console = False
 
 # Action plan
-use_action_plan = True
+use_action_plan = 1/7
 
 # Add tag at end of file
-tag = '_rolled'
+tag = '_inters_sparse'
+
+print(f'File tag: {tag}')
 
 # Fit models 
 fit_models(internal_states_list,
@@ -74,4 +77,4 @@ fit_models(internal_states_list,
            use_fitted_params=use_fitted_parameters,
            save_data=save_data,
            console=console,
-           file_tag='')
+           file_tag=tag)

@@ -25,4 +25,9 @@ def generate_action_plan(N, K=3, abs_value=90, time=2/7):
                 done_counts[1, j] += 1
                 break
 
+    # Add offset
+    offset = int((N * ( 1 - K*time) / K ) / 2)
+    actions = np.roll(actions, offset)
+    values = np.roll(values, offset, axis=0)
+
     return actions, values
