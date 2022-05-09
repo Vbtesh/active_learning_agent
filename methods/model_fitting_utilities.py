@@ -700,6 +700,23 @@ def fit_params_models_grouplevel(params_initial_guesses,              # Initial 
             cols = ['pid', 'experiment', 'num_trials', 'model_name', 'nLL', 'bic', 'params', 'params_labels', 'success', 'message', 'time']
             df = pd.DataFrame(columns=cols)
 
+        if exists(out_file):
+            df = pd.read_csv(out_file)
+            if 'Unnamed: 0' in df.columns:
+                df = df.drop(['Unnamed: 0'], axis=1)
+            if not df.empty:
+                experiment_done = df.loc[df.index[0], 'experiment']
+                if experiment_done == experiment:
+                    print(f'{experiment} already done. Passing...')
+                    return
+
+        else:
+            # Define DataFrame
+            cols = ['pid', 'experiment', 'num_trials', 'model_name', 'nLL', 'bic', 'params', 'params_labels', 'success', 'message', 'time']
+            df = pd.DataFrame(columns=cols)
+            pids_done = []
+            df.to_csv(out_file, index=False)
+
         
 
         
@@ -890,7 +907,7 @@ def fit_group(params_to_fit,
 
         nLL += part_nLL
     
-    print(f'nLL {np.round(nLL, 4)}, nLL per trial: {np.round(nLL/num_done), 4}')
+    print(f'nLL {np.round(nLL, 4)}, nLL per trial: {np.round(nLL/num_done, 4)}')
     print(f'Total trials: {num_trials}, Total done: {num_done}')
 
     return nLL/num_done

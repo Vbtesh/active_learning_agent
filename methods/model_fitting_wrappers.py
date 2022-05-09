@@ -28,7 +28,7 @@ def fit_participant_param_wrapper(data_path,
     if outdir_path[-4:] == 'csv':
         outfile = outdir_path
     else:
-        outfile = f'{outdir_path}/{exp_str}_{internal_state}.csv'
+        outfile = f'{outdir_path}/{exp_str}_{internal_state}_&_{"_".join(parameter_tags)}.csv'
     
     ## Import behavioural experiment
     with open(data_path, 'rb') as inFile:
@@ -56,7 +56,12 @@ def fit_participant_param_wrapper(data_path,
             fitting_change = True          
         
         if 'att' in parameter_tags:
-            fitting_attention = True
+            fitting_attention = True 
+
+
+    if 'LC_discrete' in internal_state:
+        if 'att' in parameter_tags:
+            fitting_attention = True 
             
 
     # CES
@@ -143,7 +148,7 @@ def fit_group_param_wrapper(data_path,
     if outdir_path[-4:] == 'csv':
         outfile = outdir_path
     else:
-        outfile = f'{outdir_path}/{exp_str}_{internal_state}.csv'
+        outfile = f'{outdir_path}/{exp_str}_{internal_state}_&_{"_".join(parameter_tags)}.csv'
     
     ## Import behavioural experiment
     with open(data_path, 'rb') as inFile:
@@ -172,7 +177,11 @@ def fit_group_param_wrapper(data_path,
         
         if 'att' in parameter_tags:
             fitting_attention = True
-            
+
+    
+    if 'LC_discrete' in internal_state:
+        if 'att' in parameter_tags:
+            fitting_attention = True     
 
     # CES
     fitting_guess = False
@@ -205,17 +214,18 @@ def fit_group_param_wrapper(data_path,
     sensory_params_labels = params_to_fit_tuple[4]
     fitting_list = params_to_fit_tuple[5]
 
-
-    print(f'Fitting: {internal_states_list[0]}...')
-    print(f'Parameters: {internal_params_labels + action_params_labels + sensory_params_labels}')
-
-    # Import model dicts
-    models_dict = import_states_params_asdict()
-
     if len(experiments) == 1:
         exp = experiments[0]
     else:
         exp = experiments
+
+    print(f'Fitting: {internal_states_list[0]} for {exp}...')
+    print(f'Parameters: {internal_params_labels + action_params_labels + sensory_params_labels}')
+    
+    # Import model dicts
+    models_dict = import_states_params_asdict()
+
+    
     # Run fitting function
     summary = fit_params_models_grouplevel(params_initial_guesses,
                                            params_bounds,

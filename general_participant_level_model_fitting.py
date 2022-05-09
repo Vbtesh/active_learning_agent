@@ -8,9 +8,9 @@ data_path = [
 ]
 
 internal_states = [
-    'change_obs_fk',
-    'LC_discrete_att',
-    'change_obs_fk',
+    #'change_obs_fk',
+    #'LC_discrete_att',
+    #'change_obs_fk',
     'LC_discrete_att'
 ]
 
@@ -19,9 +19,9 @@ outdir_path = [
 ]
 
 tags = [
-    ['att', 'cha'],
-    ['att'],
-    ['att', 'cha', 'prior'],
+    #['att', 'cha'],
+    #['att'],
+    #['att', 'cha', 'prior'],
     ['att', 'prior']
 ]
 
