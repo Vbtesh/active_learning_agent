@@ -1,7 +1,8 @@
 import numpy as np
 import jax
 from copy import deepcopy
-from numpy.random.mtrand import uniform
+
+from classes.action_states.as_helpers import Pseudo_AS
 
 
 class Action_state():
@@ -57,6 +58,8 @@ class Action_state():
             return None
         elif self._behaviour == 'obs' and self._realised:
             self._current_action = self.a_real
+
+            self._actions_history[self._n] = self._current_action 
             if type(self._current_action) == tuple:
                 self._variable_history[self._n] = self._current_action[0]
 
@@ -70,19 +73,23 @@ class Action_state():
                 value = np.random.choice([-1, 1]) * np.random.choice(self._poss_actions)
                 self._current_action = (variable-1, value)
 
+            self._actions_history[self._n] = self._current_action 
             if type(self._current_action) == tuple:
                 self._variable_history[self._n] = self._current_action[0]
 
             self._n += 1
             return self._current_action
 
-        elif internal_state.posterior_entropy < self._epsilon and self._n > 0.33*self._N:
+        elif internal_state.posterior_entropy_unsmoothed < self._epsilon and self._n > 0.33*self._N:
             self._n += 1
-            return None
+            self._current_action = None
+            self._actions_history[self._n] = self._current_action 
+            return self._current_action
 
         # Sample_action function.
         self._current_action = self._sample_action(external_state, sensory_state, internal_state)
 
+        self._actions_history[self._n] = self._current_action 
         if type(self._current_action) == tuple:
             self._variable_history[self._n] = self._current_action[0]
 
@@ -94,7 +101,7 @@ class Action_state():
     ## Needs action data to be loaded to function
     def fit(self, external_state, sensory_state, internal_state): 
         # Constraint actual action
-        constrained_action = self._constrain_action(self.a_fit)
+        constrained_action = self._constrain_action(self.a_real)
         self._current_action = constrained_action
 
         # Get action len from a_fit by looking ahead in the array
@@ -109,6 +116,7 @@ class Action_state():
         if self._behaviour == 'obs':
             # Record action if action was taken
             self._actions_history[self._n] = self._current_action 
+
             if type(self._current_action) == tuple:
                 self._variable_history[self._n] = self._current_action[0]
             
@@ -295,7 +303,7 @@ class Treesearch_AS(Action_state):
 
         self._poss_actions = possible_actions
         self._action_idx = 0
-        self._current_action = self._num_actions # Represents the index of doing nothing, i.e. None, in list form 
+        self._current_action = None # Represents the index of doing nothing, i.e. None, in list form 
 
         self._tree_search_func = tree_search_func
         self._tree_search_func_args = tree_search_func_args
@@ -342,7 +350,6 @@ class Treesearch_AS(Action_state):
 
             # Update history
             self._action_values[self._n] = action_values  
-            self._actions_history[self._n] = sampled_action
 
             # Reset action_idx
             self._action_idx = 0
@@ -353,7 +360,7 @@ class Treesearch_AS(Action_state):
         else:
             self._action_idx += 1
             # If not time to act again, simply return None
-            return None
+            return self._current_action
 
 
     def _tree_search_action_fit(self, action, external_state, sensory_state, internal_state):   
@@ -404,14 +411,16 @@ class Treesearch_AS(Action_state):
 
             # Variable for printing, sample has 
             sample_print = external_state.causal_vector
-            print('Compute action values, C=', c, 'Model n:', internal_state._n, 'Sampled graph:', sample_print)
+
+            #print('Compute action values, C=', c, 'Model n:', internal_state._n, 'Sampled graph:', sample_print)
 
             # Build outcome tree
-            seqs_values_astree = self._tree_search_func(0, external_state, 
-                                                             sensory_state,
-                                                             internal_state,
-                                                             self._run_local_experiment,
-                                                             *self._tree_search_func_args)
+            seqs_values_astree = self._tree_search_func(0, 
+                                                        external_state, 
+                                                        sensory_state,
+                                                        internal_state,
+                                                        self._run_local_experiment,
+                                                        *self._tree_search_func_args)
 
             # Extract action values
             leaves = jax.tree_leaves(seqs_values_astree)
@@ -456,21 +465,29 @@ class Treesearch_AS(Action_state):
     # Update rule for the leaves values
     # Simulates an agent's update
     def _run_local_experiment(self, action_idx, external_state, sensory_state, internal_state):
-        init_entropy = internal_state.posterior_entropy
+        init_entropy = internal_state.posterior_entropy_unsmoothed
         #print('init_entropy:', init_entropy, 'action:', action, 'external_state:', external_state.causal_vector)
-        if internal_state._n + self._action_len >= internal_state._N:
+        if internal_state._n + self._action_len + 1 >= internal_state._N:
             N = internal_state._N - internal_state._n
         else:
-            N = self._action_len
+            N = self._action_len + 1
 
         action = self._remap_action(action_idx)
 
-        for n in range(N):
+        # Instantiate pseudo action
+        pseudo_action = Pseudo_AS(action, self._action_len, self._realised)
+
+        if self._n > 1:
+            a = action
+
+        for n in range(int(N)):
             external_state.run(interventions=action)
             sensory_state.observe(external_state, internal_state)
-            internal_state.update(sensory_state, action)
+            internal_state.update(sensory_state, pseudo_action)
 
-        return init_entropy - internal_state.posterior_entropy
+        posterior_entropy = internal_state.posterior_entropy_unsmoothed
+
+        return (init_entropy - posterior_entropy, external_state, sensory_state, internal_state)
 
     
     def _average_over_sequences(self, seqs_values, seqs):
@@ -482,8 +499,6 @@ class Treesearch_AS(Action_state):
         return action_values
 
 
-# Experience based action selection
-## Action values are considered state independent
 class Experience_AS(Action_state):
     def __init__(self, N, K, behaviour, epsilon, possible_actions, policy_funcs, experience_gained_func):
         super().__init__(N, K, behaviour, epsilon, self._experience_action_sample, self._experience_action_fit)

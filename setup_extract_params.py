@@ -2,41 +2,48 @@ import numpy as np
 import pandas as pd
 from ast import literal_eval
 import json
+from os.path import exists
 
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 models_ran = [
-    'LC_discrete_attention',
-    'change_d_obs_fk',
-    'change_d_obs_cause_effect',
-    'change_d_obs_cause',
+    #'LC_discrete_attention',
+    #'change_d_obs_fk',
+    #'change_d_obs_cause_effect',
+    #'change_d_obs_cause',
     'LC_discrete',
     'normative',
     'ces_strength',
-    'ces_no_strength'
+    'ces_no_strength',
+    'LC_discrete_att',
+    'change_obs_fk'
 ]
 
 file_tags = [
-    ['att', 'att_prior'],
-    ['att_cha', 'att_cha_prior'],
-    ['att_cha'],
-    ['att_cha'],
+    #['att', 'att_prior'],
+    #['att_cha', 'att_cha_prior'],
+    #['att_cha'],
+    #['att_cha'],
     [1, 'prior'],
     [1, 'prior'],
     ['str_guess'],
-    ['guess']
+    ['guess'],
+    ['att', 'att_prior'],
+    ['att_cha', 'att_cha_prior']
 ]
 
 model_labels = [
-    ['LC w. attention', 'LC w. attention w. prior'],
-    ['Change w. full knowledge', 'Change w. full knowledge w. prior'],
-    ['Change linear cause effect'],
-    ['Change linear cause'],
+    #['LC w. attention', 'LC w. attention w. prior'],
+    #['Change w. full knowledge', 'Change w. full knowledge w. prior'],
+    #['Change linear cause effect'],
+    #['Change linear cause'],
     ['LC basic', 'LC basic w. prior'],
     ['normative', 'normative w. prior'],
     ['CES strength sensitive'],
-    ['CES basic']
+    ['CES basic'],
+    ['AS LC', 'AS LC w. prior'],
+    ['Change', 'Change w. prior']
 ]
 
 model_names = []
@@ -47,14 +54,22 @@ for names in model_labels:
 df = pd.DataFrame()
 for i, model in enumerate(models_ran):
     for j, tag in enumerate(file_tags[i]):
-        if df.empty:
-            df = pd.read_csv(f'./data/params_fitting_outputs/{model}/summary_fit_{tag}.csv')
+
+        if exists(f'./data/params_fitting_outputs/{model}/summary_fit_{tag}.csv'):
+            good_path = f'./data/params_fitting_outputs/{model}/summary_fit_{tag}.csv'
+        elif exists(f'./data/params_fitting_outputs/{model}/exp1234_{model}_&_{tag}.csv'):
+            good_path = f'./data/params_fitting_outputs/{model}/exp1234_{model}_&_{tag}.csv'
+        else:
+            good_path = f'./data/params_fitting_outputs/{model}/exp123_{model}_&_{tag}.csv'
+
+        if df.empty:        
+            df = pd.read_csv(good_path)
             df = df.replace([model], [model_labels[i][j]])
             df['tag'] = tag
             df['folder'] = model
     
         else:
-            df_2 = pd.read_csv(f'./data/params_fitting_outputs/{model}/summary_fit_{tag}.csv')
+            df_2 = pd.read_csv(good_path)
             df_2 = df_2.replace([model], [model_labels[i][j]])
             df_2['tag'] = tag
             df_2['folder'] = model
@@ -76,29 +91,29 @@ for model in model_names:
 
 df_bic = df_bic[df_bic.mean().sort_values().index]
 df_bic['Baseline'] = -2 * 4 * np.log(1/5**6)
+df_bic.loc[df[df.experiment == 'experiment_4'].pid.unique(), 'Baseline'] = -2 * 5 * np.log(1/5**6)
 df_bic['experiment'] = experiments_series
 
 
-
 select_lc_attention = [
-    'LC w. attention',
-    'LC w. attention w. prior',
+    'AS LC',
+    'AS LC w. prior',
     'Baseline'
 ]
 select_change = [
-    'Change w. full knowledge',
-    'Change w. full knowledge w. prior',
+    'Change',
+    'Change w. prior',
     'Baseline'
 ]
 
 df_prior = pd.DataFrame(index=pids, columns=['experiment', 'lc_bic', 'lc_prior', 'change_bic', 'change_prior'])
 
 df_prior['experiment'] = experiments_series
-df_prior['lc_bic'] = df[df.model_name == 'LC w. attention w. prior'].bic.to_list()
-df_prior['change_bic'] = df[df.model_name == 'Change w. full knowledge w. prior'].bic.to_list()
+df_prior['lc_bic'] = df[df.model_name == 'AS LC w. prior'].bic.to_list()
+df_prior['change_bic'] = df[df.model_name == 'Change w. prior'].bic.to_list()
 
-df_prior['lc_prior'] = df[df.model_name == 'LC w. attention w. prior'].apply(lambda x: float(" ".join(x.params[1:-1].split()).split(' ')[-1]), axis=1).to_list()
-df_prior['change_prior'] = df[df.model_name == 'Change w. full knowledge w. prior'].apply(lambda x: float(" ".join(x.params[1:-1].split()).split(' ')[-1]), axis=1).to_list()
+df_prior['lc_prior'] = df[df.model_name == 'AS LC w. prior'].apply(lambda x: float(" ".join(x.params[1:-1].split()).split(' ')[-1]), axis=1).to_list()
+df_prior['change_prior'] = df[df.model_name == 'Change w. prior'].apply(lambda x: float(" ".join(x.params[1:-1].split()).split(' ')[-1]), axis=1).to_list()
 
 df_prior['best_change'] = df_bic[select_change].apply(lambda x: np.argmin(x), axis=1)
 #df_prior['best_change'] = df_prior['best_change'].replace(np.arange(len(select_change)), select_change)

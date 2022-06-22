@@ -5,6 +5,7 @@ from os.path import exists
 from scipy.optimize import minimize
 import time
 import math
+import json
 
 from classes.experiment import Experiment
 from classes.agent import Agent
@@ -40,7 +41,7 @@ def fit_models(internal_states_list,                # List of internal states na
                use_fitted_params=False,             # Flag uses default params if false, else is a dictionary of params            
                build_space=True,                    # Boolean, set true for pre initialisation of fixed and large objects
                save_data=True,                      # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
-               save_posteriors=False,               # /!\ Performance warning /!\ if true, stores all posterior distributions over models
+               save_full_data=False,                # /!\ Performance warning /!\ if true, stores all posterior distributions over models
                fit_judgement=False,                 # If true fit judgement
                console=False,                       # If true, log progress on the console
                file_tag=''):                             
@@ -66,22 +67,10 @@ def fit_models(internal_states_list,                # List of internal states na
 
         # Posterior DataFrame
         # One per internal state
-        if save_posteriors:
-            links_cols = [f'link_{i}' for i in range(K**2 - K)]
-            dfs_posteriors = []
-            for model in internal_states_list:
-                # Create files if they don't exist yet
-                if not exists(f'./data/model_fitting_outputs/{model}/posteriors.csv'):
-                    dfs_p = pd.DataFrame(columns=links_cols, data=space_triple[0])
-                    dfs_p.to_csv((f'./data/model_fitting_outputs/{model}/posteriors.csv'), index=False)
-                else:
-                    dfs_p = pd.read_csv(f'./data/model_fitting_outputs/{model}/posteriors.csv')
-
-                # Stores index and initialise empty dataframe of posteriors
-                posterior_index = dfs_p.index
-                dfs_posteriors.append(pd.DataFrame(index=posterior_index))
-                # Reset df
-                dfs_p = None
+        if save_full_data:
+            links_cols = [f'link_{i}' for i in range(K**2 - K)] 
+            generated_data = {}
+            
         
     # Count participant index
     sample_size = len(data_dict.keys())
@@ -109,16 +98,20 @@ def fit_models(internal_states_list,                # List of internal states na
             judgement_data = trial_data['links_hist'] # Change in judgement sliders
             posterior_judgement = trial_data['posterior'] # Final states of judgement sliders
             prior_judgement = trial_data['prior'] if 'prior' in trial_data.keys() else None
+            utid = trial_data['utid']
 
             # Unpack generic trial relevant parameters
             N = data.shape[0] # Number of datapoints
             K = data.shape[1] # Number of variables
 
-            if use_action_plan:
+            if isinstance(use_action_plan, float):
                 action_plan = generate_action_plan(N, K, time=use_action_plan)
+            elif use_action_plan == 'real_actions':
+                action_plan = [trial_data['inters'], trial_data['data']]
                 acting_len = (1 - np.isnan(action_plan[0])).mean()
-            else:
+            elif use_action_plan in ['actor', 'random', 'obs']:
                 action_plan = None
+                behaviour = use_action_plan
 
             # Set up OU netowrk 
             external_state = models_dict['external']['OU_Network']['object'](N, K, 
@@ -197,10 +190,9 @@ def fit_models(internal_states_list,                # List of internal states na
                     if action_plan:
                         a_s.load_action_plan(*action_plan)
                     else:
-                        # If no action plan, behaviour is random
-                        a_s._behaviour = 'random'
-                        # DOES NOT HAVE TO BE
-
+                        # If no action plan, behaviour
+                        a_s._behaviour = behaviour
+    
                 action_states.append(a_s)
 
             if len(action_states) == 1: # Must be true atm, multiple action states are not supported
@@ -232,21 +224,25 @@ def fit_models(internal_states_list,                # List of internal states na
             ### Must happens for all internal states in internal states
             ### UID, pid, experiment, difficulty, scenario, model_name, log likelihood, prior_entropy, posterior_entropy, model_specs
             ## Collect posteriors for fitting
-            utid = f'{part_experiment[-1]}_{participant}_{model_name}_{difficulty}'
- 
+            if save_full_data:
+                generated_data[utid] = {}
             for i, i_s in enumerate(internal_states):
                 
-                if save_posteriors:
-                    # Posterior for each model
-                    dfs_posteriors[i][utid] = i_s.posterior_over_models
-                    # Every 5 participants, save data and reset dfs_posteriors
-                    if (part_idx % 5 == 0 or part_idx == sample_size - 1):
-                        df_old = pd.read_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/posteriors.csv')
-                        pd.concat([df_old, dfs_posteriors[i]], axis=1).to_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/posteriors.csv', index=False)
-                        # Reset dfs
-                        df_old = None  
-                        dfs_posteriors[i] = pd.DataFrame(index=posterior_index)
-                
+                if save_full_data:
+                    # Save data
+                    generated_data[utid][internal_states_list[i]] = {} 
+
+                    generated_data[utid][internal_states_list[i]]['pid'] = participant
+                    generated_data[utid][internal_states_list[i]]['experiment'] = part_experiment
+                    generated_data[utid][internal_states_list[i]]['difficulty'] = difficulty
+                    generated_data[utid][internal_states_list[i]]['scenario'] = model_name
+                    generated_data[utid][internal_states_list[i]]['ground_truth'] = ground_truth
+                    generated_data[utid][internal_states_list[i]]['posterior_map'] = i_s.MAP
+                    generated_data[utid][internal_states_list[i]]['posterior_judgement'] = posterior_judgement
+                    generated_data[utid][internal_states_list[i]]['prior_judgement'] = prior_judgement
+                    generated_data[utid][internal_states_list[i]]['prior_entropy'] = i_s.prior_entropy
+                    generated_data[utid][internal_states_list[i]]['posterior_entropy_unsmoothed'] = i_s.posterior_entropy_unsmoothed
+                    generated_data[utid][internal_states_list[i]]['fitted_params'] = fitted_params_dict[internal_states_list[i]]
 
                     # Posteriors for each judgement and each trial
                     ## Set up posterior dataframe for each trial and for each model
@@ -263,7 +259,11 @@ def fit_models(internal_states_list,                # List of internal states na
                         df_posteriors_trial[f'posterior_{j_idx}'] = posterior_over_models
 
                     # Save df directly
-                    df_posteriors_trial.to_csv(f'./data/model_fitting_outputs/{internal_states_list[i]}/trials/{internal_states_list[i]}_{utid}.csv', index=False)
+                    generated_data[utid][internal_states_list[i]]['posteriors_at_judgements'] = df_posteriors_trial
+                    generated_data[utid][internal_states_list[i]]['entropy_history'] = i_s.entropy_history
+                    generated_data[utid][internal_states_list[i]]['interventions'] = inters
+                    generated_data[utid][internal_states_list[i]]['data'] = data
+                    generated_data[utid][internal_states_list[i]]['judgement_data'] = judgement_data
                 
                 ## Generate summary dataframe entry
                 output = [
@@ -294,6 +294,11 @@ def fit_models(internal_states_list,                # List of internal states na
         
         # Save data every 5 participants and reset df
         if save_data and part_idx % 15 == 0:
+
+            if save_full_data:
+                with open(f'./data/.models_full_data/full_data_{fit_or_run}{file_tag}.obj', 'wb') as outfile:
+                    pickle.dump(generated_data, outfile)
+
             df_old = pd.read_csv(f'./data/model_fitting_outputs/summary_data_{fit_or_run}{file_tag}.csv')
             pd.concat([df_old, df], ignore_index=True).to_csv(f'./data/model_fitting_outputs/summary_data_{fit_or_run}{file_tag}.csv', index=False)
             # Resets dfs
@@ -303,10 +308,14 @@ def fit_models(internal_states_list,                # List of internal states na
     
     # Final save
     if save_data:
+
+        if save_full_data:
+            with open(f'./data/.models_full_data/full_data_{fit_or_run}{file_tag}.obj', 'wb') as outfile:
+                pickle.dump(generated_data, outfile)
+
         df_old = pd.read_csv(f'./data/model_fitting_outputs/summary_data_{fit_or_run}{file_tag}.csv')
         pd.concat([df_old, df], ignore_index=True).to_csv(f'./data/model_fitting_outputs/summary_data_{fit_or_run}{file_tag}.csv', index=False)
             
-
         return pd.read_csv(f'./data/model_fitting_outputs/summary_data_{fit_or_run}{file_tag}.csv')
 
 
@@ -361,10 +370,8 @@ def extract_final_judgements(data_dict):      # Dict of data for each participan
             judgement_data = trial_data['links_hist'] # Change in judgement sliders
             posterior_judgement = trial_data['posterior'] # Final states of judgement sliders
             prior_judgement = trial_data['prior'] if 'prior' in trial_data.keys() else None
-
-            # Extract relevant data
-        
-            utid = f'{part_experiment[-1]}_{participant}_{model_name}_{difficulty}'
+            utid = trial_data['utid']
+            #utid = f'{part_experiment[-1]}_{participant}_{model_name}_{difficulty}'
 
             final_judgement = (space_triple[0] == posterior_judgement).all(axis=1)
 
@@ -568,6 +575,7 @@ def fit_participant(params_to_fit,
         judgement_data = trial_data['links_hist'] # Change in judgement sliders
         posterior_judgement = trial_data['posterior'] # Final states of judgement sliders
         prior_judgement = trial_data['prior'] if 'prior' in trial_data.keys() else None
+        utid = trial_data['utid']
 
         # Unpack generic trial relevant parameters
         N = data.shape[0] # Number of datapoints
@@ -815,6 +823,7 @@ def fit_group(params_to_fit,
             judgement_data = trial_data['links_hist'] # Change in judgement sliders
             posterior_judgement = trial_data['posterior'] # Final states of judgement sliders
             prior_judgement = trial_data['prior'] if 'prior' in trial_data.keys() else None
+            utid = trial_data['utid']
 
             # Unpack generic trial relevant parameters
             N = data.shape[0] # Number of datapoints

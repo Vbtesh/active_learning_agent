@@ -24,7 +24,8 @@ class Local_computations_omniscient_DIS(Discrete_IS):
 
         # Define own attractor mu, should be mu for each given the other two
         self._mus = self._attractor_mu(np.zeros(self._K))
-        #self._mus_history = [None for i in range(self._N)]
+        self._mus_history = [None for i in range(self._N)]
+        self._mus_history[0] = self._mus
 
         
 
@@ -42,14 +43,21 @@ class Local_computations_omniscient_DIS(Discrete_IS):
                     log_likelihood = stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=self._sigma*np.sqrt(self._dt))
                     # Normalisation step
                     likelihood_log = log_likelihood - np.amax(log_likelihood)
-                    likelihood_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum()
+                    #likelihood_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum()
 
-                    ## If intervention, the probability of observing the new values is set to 1
+                    ### If intervention, the probability of observing the new values is set to 1
+                    #if isinstance(intervention, tuple):
+                    #    if j == intervention[0]:
+                    #        likelihood_norm[:] = 1
+
+                    #log_likelihood_per_link[idx, :] = np.log(likelihood_norm)
+
+                    # If intervention, the probability of observing the new values is set to 1
                     if isinstance(intervention, tuple):
                         if j == intervention[0]:
-                            likelihood_norm[:] = 1
+                            likelihood_log[:] = 0
 
-                    log_likelihood_per_link[idx, :] = np.log(likelihood_norm)
+                    log_likelihood_per_link[idx, :] = likelihood_log
                     idx += 1
         
         # Posterior params is the log likelihood of each model given the data
@@ -65,10 +73,11 @@ class Local_computations_omniscient_DIS(Discrete_IS):
     ## Prior initialisation specific to model:
     def _local_prior_init(self):
         self._prior_params = np.log(self._prior_params)
+        self._mus = self._mus_history[self._n]
     
     # Mus
     def _update_mus(self, obs):
-        #self._mus_history[self._n] = self._mus
+        self._mus_history[self._n] = self._mus
         self._mus = self._attractor_mu(obs)
 
     

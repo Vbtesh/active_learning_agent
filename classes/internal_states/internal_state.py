@@ -101,8 +101,9 @@ class Internal_state():
             self._n = 0
             self._reset_priors()
         else:
-            self._n -= back
+            self._n -= int(back)
 
+            self._local_prior_init()
             self._posterior_params = self._posterior_params_history[self._n]
             # Reset Action values, seq and planned action from n to N
             for n in range(self._n+1, self._N):
@@ -123,6 +124,7 @@ class Internal_state():
 
     
     def _reset_prior(self):
+        self._local_prior_init()
         # Simply reset priors to intial states
         self._posterior_params = self._prior_params
         self._posterior_params_history = [None for i in range(self._N)]
@@ -256,7 +258,7 @@ class Discrete_IS(Internal_state):
     
     @property
     def entropy_history(self):
-        posterior_history = self._likelihood(self._posterior_params_history)
+        posterior_history = self._likelihood(self._posterior_params_history[:self._n])
         return self._entropy(posterior_history)
 
     # Return a posterior over model for the given index between 0 and N
@@ -268,11 +270,19 @@ class Discrete_IS(Internal_state):
             return self._links_to_models(self._smooth(posterior))
 
     # Samples the posterior, the number of samples is given by the size parameter
-    def posterior_sample(self, size=1, uniform=False, as_matrix=False):
+    def posterior_sample(self, size=1, uniform=False, as_matrix=False, smoothed=False):
         if uniform:
             graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size)
         else:
-            graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size, p=self.posterior_over_models)
+            if smoothed:
+                graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size, p=self.posterior_over_models)
+            else:
+                if len(self.posterior_unsmoothed.shape) == 1:
+                    p = self.posterior_unsmoothed
+                else:
+                    p = self._links_to_models(self.posterior_unsmoothed)
+                
+                graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size, p=p)
             
         if as_matrix:
             return self._sample_space_as_mat[graph_idx].squeeze()

@@ -25,13 +25,25 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         # Define own attractor mu, should be mu for each given the other two
         self._mus = self._attractor_mu(np.zeros(self._K))
         self._mus_history = [None for i in range(self._N)]
+        self._mus_history[0] = self._mus
 
+        self._decay_rate = decay_rate
+
+        self._varfocus = True
+        self._decay_type = decay_type
         if decay_type == 'exponential':
             self._power_update_coef = self._exponential_decay
         elif decay_type == 'sigmoid':
             self._power_update_coef = self._sigmoid_decay
+            self._decay_rate = decay_rate if decay_rate > 1e-1 else 1e-1
+        elif decay_type == 'total':
+            self._power_update_coef = self._total_attention
+            self._varfocus = False
+        elif decay_type == 'partial':
+            self._power_update_coef = self._partial_attention
+            self._varfocus = False
 
-        self._decay_rate = decay_rate if decay_rate > 1e-1 else 1e-1
+        
 
         self._last_action = None
         self._last_action_len = None
@@ -48,9 +60,14 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         
         obs = sensory_state.s
         
+        
+        
         if action_state.realised:
             # If fitting, check between fit and real action
-            if (not self._last_action and not action_state.a_real) or self._n == 0:
+            if self._decay_type in ['partial', 'total']:
+                if action_state.a_real:
+                    self._last_action = action_state.a_real
+            elif (not self._last_action and not action_state.a_real) or self._n == 0:
                 self._last_obs = obs
                 self._last_instant_action = action_state.a_real
                 return self._posterior_params
@@ -63,7 +80,6 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                 self._last_action_end = None
 
                 self._last_action = action_state.a_real
-
         
             elif self._last_action and action_state.a_real:
                 if not self._last_instant_action:
@@ -72,7 +88,7 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                     self._last_action_len = action_state.a_len_real      
                     # Reset last action index
                     self._last_action_idx = 0
-                    self._last_action_end = None
+                    self._last_action_end = None 
 
                     self._last_action = action_state.a_real
 
@@ -82,7 +98,10 @@ class Local_computations_interfocus_DIS(Discrete_IS):
     
         else:
             # If generating data
-            if (not self._last_action and not intervention) or self._n == 0:
+            if self._decay_type in ['partial', 'total']:
+                if intervention:
+                    self._last_action = intervention
+            elif (not self._last_action and not intervention) or self._n == 0:
                 self._last_obs = obs
                 self._last_instant_action = intervention
                 return self._posterior_params
@@ -94,18 +113,18 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                 self._last_action_end = None
 
                 self._last_action = intervention
-                self._last_instant_action = intervention
+
             elif self._last_action and intervention:
-                if not self._last_instant_action:
+                if self._last_action != intervention:
                     # Action length is
                     self._last_action_len = action_state.a_len     
                     # Reset last action index
                     self._last_action_idx = 0
                     self._last_action_end = None
 
-                    self._last_action = intervention
-                    self._last_instant_action = intervention
-
+                self._last_action = intervention
+                
+  
             elif self._last_instant_action and not intervention:
                 # Stopped acting
                 self._last_action_end = 1  
@@ -123,9 +142,20 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         for i in range(self._K):
             for j in range(self._K):
                 if i != j:
-                    if j == self._last_action[0] or i != self._last_action[0]:
-                        log_likelihood_per_link[idx, :] = np.zeros(self._L.size)
-                        
+                    if self._varfocus:
+                        if j == self._last_action[0] or i != self._last_action[0]:
+                            log_likelihood_per_link[idx, :] = np.zeros(self._L.size)
+                       
+                        else:
+                            # Likelihood of observed the new values given the previous values for each model
+                            log_likelihood = power_coef * stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=self._sigma*np.sqrt(self._dt))
+                            # Normalisation step
+                            likelihood_log = log_likelihood - np.amax(log_likelihood)
+                            #likelihood_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum()
+
+                            #log_likelihood_per_link[idx, :] = np.log(likelihood_norm)
+                            log_likelihood_per_link[idx, :] = likelihood_log
+                            a = 1
                     else:
                         # Likelihood of observed the new values given the previous values for each model
                         log_likelihood = power_coef * stats.norm.logpdf(obs[j], loc=self._mus[idx, :], scale=self._sigma*np.sqrt(self._dt))
@@ -133,7 +163,13 @@ class Local_computations_interfocus_DIS(Discrete_IS):
                         likelihood_log = log_likelihood - np.amax(log_likelihood)
                         likelihood_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum()
 
+                        ## If intervention, the probability of observing the new values is set to 1
+                        if isinstance(intervention, tuple):
+                            if j == intervention[0]:
+                                likelihood_norm[:] = 1
+
                         log_likelihood_per_link[idx, :] = np.log(likelihood_norm)
+
                     idx += 1
         
         # Posterior params is the log likelihood of each model given the data
@@ -146,11 +182,11 @@ class Local_computations_interfocus_DIS(Discrete_IS):
         self._last_action_idx += 1
 
         if action_state.realised:
-            if not self._last_instant_action and not action_state.a_real:
+            if not self._last_instant_action and not action_state.a_real and self._decay_type not in ['total', 'partial']:
                 self._last_action_end += 1
             self._last_instant_action = action_state.a_real
         else:
-            if not self._last_instant_action and not intervention:
+            if not self._last_instant_action and not intervention and self._decay_type not in ['total', 'partial']:
                 self._last_action_end += 1
             self._last_instant_action = intervention
 
@@ -161,6 +197,7 @@ class Local_computations_interfocus_DIS(Discrete_IS):
     ## Prior initialisation specific to model:
     def _local_prior_init(self):
         self._prior_params = np.log(self._prior_params)
+        self._mus = self._mus_history[self._n]
 
     # Power update coefficients
     ## Exponential decay
@@ -173,6 +210,21 @@ class Local_computations_interfocus_DIS(Discrete_IS):
     ## Sigmoid decay
     def _sigmoid_decay(self, delay):
         return 1 / (1 + self._decay_rate**(- self._last_action_idx + delay))
+
+    ## Partial attention
+    def _partial_attention(self, delay):
+        if self._last_instant_action:
+            return self._decay_rate
+        else: 
+            return 1
+
+    ## Total attention
+    def _total_attention(self, delay):
+        return self._decay_rate
+
+    
+
+    
 
     # Background methods
     def _update_mus(self, obs):

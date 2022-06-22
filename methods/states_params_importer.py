@@ -18,7 +18,7 @@ from classes.action_states.experience_discrete_3D_AS import Experience_discrete_
 from classes.action_states.experience_conti_3D_AS import Experience_conti_3D_AS
 
 from classes.sensory_states.omniscient_ST import Omniscient_ST
-from methods.policies import softmax_policy_init
+from methods.policies import epsilon_greedy_init, softmax_policy_init
 from methods.policies import discrete_policy_init
 
 
@@ -91,13 +91,14 @@ change_type = 'raw' # Can be 'normalised', 'relative', 'raw'
 
 # ACTION STATES parameters
 behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
-epsilon = 1e-2 # Certainty threshold: agent stops intervening after entropy goes below epsilon
+epsilon = 0.05 # Certainty threshold: agent stops intervening after entropy goes below epsilon
 
 ## Tree search action states
 tree_search_poss_actions = np.arange(-100, 101, step=10) # Possible actions to perform for tree search alg.
-action_len = 1/dt # Length between each action selection in frames (1 second is baseline)
-C = 3 # Number of model to sample from the posterior
-knowledge = False  # Can be a model as nd.array, True for perfect knowledge, 'random' for random sampling and False for posterior based sampling
+#tree_search_poss_actions = np.array([-90, 90])
+action_len = 0#1/dt # Length between each action selection in frames (1 second is baseline)
+C = 5 # Number of model to sample from the posterior
+knowledge = False  # Can be a model as nd.array, 'perfect' for perfect knowledge, 'random' for random sampling and False for posterior based sampling
 ### Hard horizon
 depth = 1 # Target depth for hard horizon undiscounted gain  
 ### Soft horizon
@@ -105,7 +106,8 @@ horizon = 1e-2 # For soft horizon discounted gain
 discount = 0.01 # For soft horizon discounted gain
 ### Action selection policy
 action_temperature = 1
-softmax_policy_funcs = softmax_policy_init(action_temperature)
+softmax_policy_funcs = epsilon_greedy_init(0)#softmax_policy_init(action_temperature)
+
     
 ## Experience Value Acting Observing (vao) action states
 experience_poss_actions = np.arange(0, 101, step=10) # Possible actions to perform for experiences
@@ -167,7 +169,7 @@ def params_to_fit_importer(internal_state,
         ],
         'prior_param': [
             1 + 1e-1*np.random.normal() * random_increment,
-            (0, 500),
+            (0, 550),
             ['prior_param']
         ]
     }
@@ -229,7 +231,7 @@ def params_to_fit_importer(internal_state,
         idx += 1
 
 
-    elif internal_state == 'LC_discrete_att':
+    elif 'LC_discrete_att' in internal_state:
         params_initial_guesses.append(params_dict['smoothing'][0])
         params_bounds.append(params_dict['smoothing'][1])
         internal_params_labels.append(params_dict['smoothing'][2] + [idx])

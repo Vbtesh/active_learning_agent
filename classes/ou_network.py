@@ -127,14 +127,9 @@ class OU_Network():
         if back > self._N or back > self._n:
             self._n = 0
         else:
-            self._n -= back
+            self._n -= int(back)
 
         if not self._realised:  
-            if back > self._N or back > self._n:
-                self._n = 0
-            else:
-                self._n -= back
-
             self._X[self._n+1:,:] = 0 # Reset data except for the initial state
             # Reset interventions
             self._I[self._n+1:] = np.nan

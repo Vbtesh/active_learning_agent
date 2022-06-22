@@ -29,7 +29,7 @@ class Sensory_state():
         if back > self._N or back > self._n:
             self._n = 0
         else:
-            self._n -= back
+            self._n -= int(back)
 
         # Roll back observations   
         self._observations[self._n+1:, :] = 0  

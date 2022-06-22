@@ -19,6 +19,11 @@ class Normative_DIS(Discrete_IS):
             self._sigma = sigma  
 
 
+        # Collect observations to recompute mus
+        self._obs_history = [None for _ in range(self._N+1)]
+        self._obs_history[0] = np.zeros(self._K)
+
+
         
     # Update rule
     def _update_rule(self, sensory_state, action_state):
@@ -43,7 +48,8 @@ class Normative_DIS(Discrete_IS):
         # Posterior params is the log likelihood of each model given the data
         ## The where argument is a problem, it makes it so models that are so unlikely that their probability is essentially 0 don't have their log likelihood penalised
         ## Cannot achieve numerical stability without it
-        log_posterior = self._posterior_params + np.log(likelihood_over_models, where=likelihood_over_models!=0)
+        log_likelihood = np.log(likelihood_over_models, where=likelihood_over_models!=0)
+        log_posterior = self._posterior_params + log_likelihood
         #log_posterior = self._posterior_params + np.log(likelihood_over_models)
 
         # Update mus
@@ -56,15 +62,17 @@ class Normative_DIS(Discrete_IS):
     # Background methods
     ## Prior initialisation specific to model:
     def _local_prior_init(self):
-        prior = self._links_to_models(self._prior_params)
-        self._prior_params = np.log(prior)
+        if len(self._prior_params.shape) == 2:
+            prior = self._links_to_models(self._prior_params)
+            self._prior_params = np.log(prior)
+
         # Compute initial attractor
-        self._mus = self._attractor_mu(np.zeros(self._K))
+        self._mus = self._attractor_mu(self._obs_history[self._n])
 
     # Update attractors for all models
     def _update_mus(self, obs):
-        #self._mus_history[self._n] = self._mus
         self._mus = self._attractor_mu(obs)
+        self._obs_history[self._n+1] = obs
 
 
     def _attractor_mu(self, obs): 

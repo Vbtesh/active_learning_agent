@@ -2,9 +2,10 @@ from methods.model_fitting_wrappers import fit_group_param_wrapper
 
 
 experiments = [
-    ['experiment_1'], 
+    #['experiment_1'], 
     #['experiment_2'], 
-    #['experiment_3']
+    #['experiment_3'],
+    ['experiment_4']
 ]
 
 data_path = [
@@ -12,33 +13,41 @@ data_path = [
 ]
 
 internal_states = [
+    #'LC_discrete_att_partial',
+    #'LC_discrete_att_partial',
+    #'LC_discrete_att_total',
+    #'LC_discrete_att_total',
     #'change_obs_fk',
     #'LC_discrete_att',
     #'change_obs_fk',
-    'LC_discrete_att',
-    #'normative',
-    #'normative', # Group 2
+    #'LC_discrete_att',
     #'LC_discrete', # Group 3
-    #'LC_discrete', 
+    'LC_discrete', 
     #'ces_strength', # Group 4
-    #'ces_no_strength'
+    #'ces_no_strength',
+    #'normative',
+    #'normative' # Group 2
+]
+
+tags = [
+    #['att'],
+    #['att', 'prior'],
+    #['att'],
+    #['att', 'prior'],
+    #['att', 'cha'],
+    #['att'],
+    #['att', 'cha', 'prior'],
+    #['att', 'prior'],
+    #['1'],
+    ['prior'],
+    #['str', 'guess'],
+    #['guess'],
+    #['1'],
+    #['prior'] # Group 2
 ]
 
 outdir_path = [
     f'./data/group_params_fitting_outputs/'
-]
-
-tags = [
-    #['att', 'cha'],
-    #['att'],
-    #['att', 'cha', 'prior'],
-    ['att', 'prior'],
-    #['1'],
-    #['prior'], # Group 2
-    #['1'],
-    #['prior'],
-    #['str', 'guess'],
-    #['guess']
 ]
 
 for e in range(len(experiments)):
