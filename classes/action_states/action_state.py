@@ -80,7 +80,7 @@ class Action_state():
             self._n += 1
             return self._current_action
 
-        elif internal_state.posterior_entropy_unsmoothed < self._epsilon and self._n > 0.33*self._N:
+        elif internal_state.posterior_entropy_unsmoothed < self._epsilon and self._n > 0.05*self._N:
             self._n += 1
             self._current_action = None
             self._actions_history[self._n] = self._current_action 
@@ -164,9 +164,12 @@ class Action_state():
 
 
     # Load data
-    def load_action_data(self, actions, actions_fit, variables_values):
+    def load_action_data(self, actions, variables_values, actions_fit=None):
         self._A = actions
-        self._A_fit = actions_fit
+        if type(actions_fit) == np.ndarray:
+            self._A_fit = actions_fit
+        else:
+            self._A_fit = actions
 
         # Create lists of actions indices for each variables
         self._A_fit_indices = self._split_action_array(self._A_fit)

@@ -16,7 +16,8 @@ locations = {
     'TA': './data/model_fitting_outputs/summary_data_fit_true.csv', # True Action (TA)
     'RA': './data/model_fitting_outputs/summary_data_run_random.csv', # Random actions (RA)
     'SA': './data/model_fitting_outputs/summary_data_run_inters_sparse.csv', # Sparse actions (SA)
-    'CI': './data/model_fitting_outputs/summary_data_run_CI.csv' # congruence inverted: use congruent actions in incongruent trials and vice versa
+    'CI': './data/model_fitting_outputs/summary_data_run_CI.csv', # congruence inverted: use congruent actions in incongruent trials and vice versa
+    'OA': './data/model_fitting_outputs/summary_data_run_OA.csv' # Optimal actions
     # GA: use their generic actions in labelled trials
     # FR: randomise the pool of labelled actions and realocate randomly
 }
@@ -25,7 +26,8 @@ tag_dict = {
     'TA': 1,
     'CI': 2,
     'SA': 3,
-    'RA': 4
+    'RA': 4,
+    'OA': 5
 }
 
 models = [

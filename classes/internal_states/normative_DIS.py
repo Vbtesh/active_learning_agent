@@ -35,22 +35,30 @@ class Normative_DIS(Discrete_IS):
 
         # Normalisation step
         likelihood_log = likelihood_per_var - np.amax(likelihood_per_var, axis=0)
-        likelihood_per_var_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum(axis=0)
+        #likelihood_per_var_norm = np.exp(likelihood_log) / np.exp(likelihood_log).sum(axis=0)
         
         ## If intervention, the probability of observing the new values is set to 1
         if isinstance(intervention, tuple):
-            likelihood_per_var_norm[:, intervention[0]] = 1
+            #likelihood_per_var_norm[:, intervention[0]] = 1
+            likelihood_log[:, intervention[0]] = 0
  
         # Compute and normalise probabilities of each model given the previous and new values
-        likelihood_to_prop = likelihood_per_var_norm.prod(axis=1)
-        likelihood_over_models = likelihood_to_prop / likelihood_to_prop.sum()
+        #likelihood_to_prop = likelihood_per_var_norm.prod(axis=1)
+        #likelihood_over_models = likelihood_to_prop / likelihood_to_prop.sum()
         
         # Posterior params is the log likelihood of each model given the data
         ## The where argument is a problem, it makes it so models that are so unlikely that their probability is essentially 0 don't have their log likelihood penalised
         ## Cannot achieve numerical stability without it
-        log_likelihood = np.log(likelihood_over_models, where=likelihood_over_models!=0)
-        log_posterior = self._posterior_params + log_likelihood
+        LL = likelihood_log.sum(axis=1)
+        #LL = np.log(likelihood_over_models, where=likelihood_over_models!=0)
+        log_posterior = self._posterior_params + LL
         #log_posterior = self._posterior_params + np.log(likelihood_over_models)
+
+        #LL_l = self._likelihood(LL)
+        #LL_c = self._likelihood(log_likelihood)
+
+        #LL_lp = self._likelihood(LL + self._posterior_params)
+        #LL_cp = self._likelihood(log_posterior)
 
         # Update mus
         self._update_mus(obs)

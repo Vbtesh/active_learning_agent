@@ -91,7 +91,7 @@ change_type = 'raw' # Can be 'normalised', 'relative', 'raw'
 
 # ACTION STATES parameters
 behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
-epsilon = 0.05 # Certainty threshold: agent stops intervening after entropy goes below epsilon
+epsilon = 0.1 # Certainty threshold: agent stops intervening after entropy goes below epsilon
 
 ## Tree search action states
 tree_search_poss_actions = np.arange(-100, 101, step=10) # Possible actions to perform for tree search alg.

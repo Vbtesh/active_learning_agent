@@ -1,4 +1,5 @@
 from math import log
+import re
 import numpy as np
 from numpy.random.mtrand import sample
 import pandas as pd
@@ -261,6 +262,15 @@ class Discrete_IS(Internal_state):
         posterior_history = self._likelihood(self._posterior_params_history[:self._n])
         return self._entropy(posterior_history)
 
+    @property
+    def entropy_history_links(self):
+        if (self._posterior_params.shape) == 2:
+            posterior_history = self._likelihood(self._posterior_params_history[:self._n])
+        else:
+            posterior_history = np.array([self._models_to_links(self._likelihood(posterior)) for posterior in self._posterior_params_history[:self._n]])
+        entropy = self._entropy(posterior_history, keepdim=True)
+        return entropy
+
     # Return a posterior over model for the given index between 0 and N
     def posterior_over_models_byidx(self, idx):
         posterior = self._likelihood(self._posterior_params_history[idx])
@@ -375,12 +385,14 @@ class Discrete_IS(Internal_state):
         return new_dist
 
 
-    def _entropy(self, distribution, custom=False):
+    def _entropy(self, distribution, custom=False, keepdim=False):
         log_dist = np.log2(distribution, where=distribution!=0)
         log_dist[log_dist == -np.inf] = 0
 
         if len(distribution.shape) == 1 or custom:
             return - np.sum(distribution * log_dist)
+        elif len(distribution.shape) == 3 and keepdim:
+            return - np.squeeze(np.sum(distribution * log_dist, axis=2))
         elif len(distribution.shape) == 3:
             return - np.squeeze(np.sum(distribution * log_dist, axis=2).sum(axis=1))
         else:

@@ -4,21 +4,20 @@ import pandas as pd
 import pickle
 import json
 
-from methods.model_fitting_utilities import fit_models
+from methods.model_fitting_utilities import generalised_model_fitting
 from methods.states_params_importer import import_states_params_asdict
-from methods.action_plans import generate_action_plan
 
 
 ## Import behavioural experiment
-with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:
+#with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:
 #with open('./data/.modelling_data_manipulated/congruence_inverted_CI.obj', 'rb') as inFile:
+with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/intervention_db.obj', 'rb') as inFile:
     modelling_data = pickle.load(inFile)
 
-## 
 experiments = [
-    #'experiment_1', 
-    #'experiment_2', 
-    #'experiment_3',
+    'experiment_1', 
+    'experiment_2', 
+    'experiment_3',
     'experiment_4'
 ]
 
@@ -32,30 +31,25 @@ print(len(modelling_data.keys()))
 selected_data = {}
 pick_interval = 1
 idx = 0
-for part, data in modelling_data.items():
+for key, data in modelling_data.items():
     #if part in exceptions:
     #    selected_data[part] = data
     #if data['experiment'] in experiments and idx % pick_interval == 0:
     #    selected_data[part] = data
 
-    if part not in exceptions:
+    if data['pid'] not in exceptions:
         if data['experiment'] in experiments:
-            selected_data[part] = data
+            selected_data[key] = data
     
     idx += 1
 
 print(len(selected_data.keys()))
 
 
-#for part, part_data in selected_data.items():
-#    print(f'|_ {part}')
-#    for m_type in part_data['trials'].keys():
-#        print(f'    |_ {m_type}')
-
 
 models_dict = import_states_params_asdict()
 
-use_fitted_parameters = True
+use_fitted_parameters = False
 
 if use_fitted_parameters:
     with open('./data/params_fitting_outputs/fitted_params.json', 'r') as infile:
@@ -64,18 +58,16 @@ if use_fitted_parameters:
     internal_states_list_full = list(use_fitted_parameters[list(use_fitted_parameters.keys())[0]].keys())
     internal_states_list = []
     for model in internal_states_list_full:
-        #if 'normative' in model:
-        #    internal_states_list.append(model)
+        if 'normative' in model:
+            internal_states_list.append(model)
         #elif 'LC_discrete_att_' in model:
         #    internal_states_list.append(model)
         #elif 'change_obs_fk' in model:
         #    internal_states_list.append(model)
         #if 'LC_discrete_&' in model:
         #    internal_states_list.append(model)
-        if 'ces' in model:
-            internal_states_list.append(model)
 else:
-    internal_states_list = ['change_d_obs_fk']
+    internal_states_list = ['normative_&_1']
 
 action_states_list = [
     #'experience_vao',
@@ -89,7 +81,11 @@ models_dict = import_states_params_asdict()
 
 # /!\ Data loss warning /!\
 save_data = True
-save_full_data = False
+save_full_data = [
+    #'posteriors_at_judgements',
+    'entropy_history',
+    'link_entropy_history'
+]
 # /!\ Data loss warning /!\
 console = False
 
@@ -101,10 +97,13 @@ console = False
 ## 'actor': /!\ ONLY ONE INTERNAL STATE AT A TIME /!\ will use the action states specified in action_states_list 
 ## 'obs': will stay idle
 ## 'random': will pick random actions
-use_action_plan = 'real_actions'
+use_action_plan = None
+
+# Fit or run
+fit_or_run = 'fit'
 
 # Add tag at end of file
-tag = '_true_4_CES'
+tag = '_inters'
 
 
 print('CONFIGURATION')
@@ -121,15 +120,15 @@ print()
 
 
 # Fit models 
-fit_models(internal_states_list,
-           action_states_list,
-           sensory_states_list,
-           models_dict,
-           selected_data,
-           fit_or_run='run',
-           use_action_plan=use_action_plan,
-           use_fitted_params=use_fitted_parameters,
-           save_data=save_data,
-           save_full_data=save_full_data,
-           console=console,
-           file_tag=tag)
+generalised_model_fitting(internal_states_list,
+                          action_states_list,
+                          sensory_states_list,
+                          models_dict,
+                          selected_data,
+                          fit_or_run=fit_or_run,
+                          use_action_plan=use_action_plan,
+                          use_fitted_params=use_fitted_parameters,
+                          save_data=save_data,
+                          save_full_data=save_full_data,
+                          console=console,
+                          file_tag=tag)

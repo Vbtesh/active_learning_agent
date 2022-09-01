@@ -13,6 +13,306 @@ from methods.action_plans import generate_action_plan
 
 from methods.sample_space_methods import build_space_env
 
+# Runs the specified model on the specified data, with given parameters without assuming anything about the structure of data
+def generalised_model_fitting(internal_states_list,                # List of internal states names as strings
+                              action_states_list,                  # List of action states names as strings
+                              sensory_states_list,                 # List of sensory states names as strings
+                              models_dict,                         # Dict of model object and parameters: can be changed in separate file                 
+                              data_dict,                           # Dict of data for each participants/trial/experiment     
+                              fit_or_run='fit',               
+                              use_action_plan=False,
+                              use_fitted_params=False,             # Flag uses default params if false, else is a dictionary of params            
+                              build_space=True,                    # Boolean, set true for pre initialisation of fixed and large objects
+                              save_data=True,                      # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
+                              save_full_data=False,                # /!\ Performance warning /!\ if true, stores all posterior distributions over models
+                              fit_judgement=False,                 # If true fit judgement
+                              console=False,                       # If true, log progress on the console
+                              file_tag='',
+                              file_name='general_summary',
+                              K=3,
+                              links=np.array([-1, -0.5, 0, 0.5, 1])): 
+
+
+    # Build internal sample space
+    if build_space:
+        space_triple = build_space_env(K, links)
+
+    # If save data, generate frames
+    if save_data:
+        # Define DataFrame
+        cols = ['uid', 'participant', 'trial_type', 'trial_name', 'model_name', 'ground_truth', 'posterior_map', 'posterior_judgement', 'prior_judgement', 'prior_entropy', 'posterior_entropy_unsmoothed', 'posterior_entropy', 'model_specs']
+        df = pd.DataFrame(columns=cols)
+        ## If summary data does not exist, create it
+        if not exists(f'./data/general_fitting_outputs/{file_name}_{fit_or_run}{file_tag}.csv'):
+            pd.DataFrame(columns=cols).to_csv(f'./data/general_fitting_outputs/{file_name}_{fit_or_run}{file_tag}.csv', index=False)
+        else:
+            df = pd.read_csv(f'./data/general_fitting_outputs/{file_name}_{fit_or_run}{file_tag}.csv')
+            uid_done = df.uid.to_list()
+
+        # Posterior DataFrame
+        # One per internal state
+        if save_full_data:
+            links_cols = [f'link_{i}' for i in range(K**2 - K)] 
+            generated_data = {}
+            
+        
+    # Count participant index
+    sample_size = len(data_dict.keys())
+    done_idx = 0
+
+    for uid, obj_data in data_dict.items():
+        print(f'uid {done_idx+1}, out of {sample_size}', )
+
+        # Extract data from participant's trial
+        trial_name = obj_data['trial_name'][:-2]
+        trial_type = obj_data['trial_type']
+        participant = obj_data['pid'] if 'pid' in obj_data.keys() else None
+        data = obj_data['data'] # Raw numerical data of variable values
+        ground_truth = obj_data['ground_truth'] # Ground truth model from which data has been generated
+        inters = obj_data['inters'] # Interventions as is
+        judgement_data = obj_data['links_hist'] if 'links_hist' in obj_data.keys() else None # Change in judgement sliders
+        posterior_judgement = obj_data['posterior'] if 'posterior' in obj_data.keys() else None # Final states of judgement sliders
+        prior_judgement = obj_data['prior'] if 'prior' in obj_data.keys() else None
+        
+    
+        if use_fitted_params:
+            fitted_params_dict = use_fitted_params[participant] 
+        else:
+            fitted_params_dict = None
+
+
+        # Unpack generic trial relevant parameters
+        N = data.shape[0] # Number of datapoints
+        K = data.shape[1] # Number of variables
+
+        if isinstance(use_action_plan, float):
+            action_plan = generate_action_plan(N, K, time=use_action_plan)
+        elif use_action_plan == 'real_actions':
+            action_plan = [obj_data['inters'], obj_data['data']]
+            acting_len = (1 - np.isnan(action_plan[0])).mean()
+        elif use_action_plan in ['actor', 'random', 'obs']:
+            action_plan = None
+            behaviour = use_action_plan
+
+        # Set up OU netowrk 
+        external_state = models_dict['external']['OU_Network']['object'](N, K, 
+                                                                         *models_dict['external']['OU_Network']['params']['args'],
+                                                                         **models_dict['external']['OU_Network']['params']['kwargs'], 
+                                                                         ground_truth=ground_truth)
+        if fit_or_run == 'fit':
+            external_state.load_trial_data(data) # Load Data
+
+        # Set up states
+        ## Internal states and sensory states
+        internal_states = []
+        sensory_states = []  
+        
+        for i, model_tags in enumerate(internal_states_list):
+            if len(model_tags.split('_&_')) == 2:
+                model, tags = model_tags.split('_&_')
+            else:
+                model = model_tags.split('_&_')[0]
+
+            ## Internal States
+            internal_states_kwargs = models_dict['internal'][model]['params']['kwargs'].copy()
+
+            ## Sensory States
+            sensory_states_kwargs = models_dict['sensory'][sensory_states_list[i]]['params']['kwargs'].copy()
+
+            # Setup fitted params
+            if use_fitted_params and model_tags in fitted_params_dict.keys():
+                for param_key, param_val in fitted_params_dict[model_tags].items():
+                    # Internal states params
+                    if param_key in internal_states_kwargs.keys():
+                        internal_states_kwargs[param_key] = param_val
+
+                    # Sensory states params
+                    if param_key in sensory_states_kwargs.keys():
+                        sensory_states_kwargs[param_key] = param_val
+
+            # Set up internal states
+            i_s = models_dict['internal'][model]['object'](N, K, 
+                                                           *models_dict['internal'][model]['params']['args'],
+                                                           **internal_states_kwargs,
+                                                           generate_sample_space = False)
+
+            # Initialse space according to build_space
+            i_s.add_sample_space_env(space_triple)
+
+            # Initialise prior distributions for all IS
+            i_s.initialise_prior_distribution(prior_judgement)
+
+            # Load data if fitting
+            if fit_or_run == 'fit':
+                i_s.load_judgement_data(judgement_data, posterior_judgement, fit_judgement)
+            
+            internal_states.append(i_s)
+            
+            # Set up sensory states
+            sensory_s = models_dict['sensory'][sensory_states_list[i]]['object'](N, K, 
+                                                                                 *models_dict['sensory'][sensory_states_list[i]]['params']['args'],
+                                                                                 **sensory_states_kwargs)
+            sensory_states.append(sensory_s)
+    
+        ## Action states
+        action_states = []
+        for model in action_states_list:
+            action_states_kwargs = models_dict['actions'][model]['params']['kwargs'].copy()
+            if use_fitted_params and model in fitted_params_dict.keys():
+                for param_key, param_val in fitted_params_dict[model].items():
+                    if param_key in action_states_kwargs.keys():
+                        action_states_kwargs[param_key] = param_val
+            
+            a_s = models_dict['actions'][model]['object'](N, K, 
+                                                         *models_dict['actions'][model]['params']['args'],
+                                                         **action_states_kwargs)
+            # Load action data if fitting
+            if fit_or_run == 'fit':
+                a_s.load_action_data(inters, data)
+            else:
+                if action_plan:
+                    a_s.load_action_plan(*action_plan)
+                else:
+                    # If no action plan, behaviour
+                    a_s._behaviour = behaviour
+
+            action_states.append(a_s)
+
+        if len(action_states) == 1: # Must be true atm, multiple action states are not supported
+            action_states = action_states[0] 
+        
+        # Create agent
+        if len(internal_states) == 1:
+            agent = Agent(N, sensory_states[0], internal_states[0], action_states)
+        else:
+            agent = Agent(N, sensory_states, internal_states, action_states)
+
+        # Create experiment
+        experiment = Experiment(agent, external_state)
+
+        # Fit data
+        if fit_or_run == 'fit':
+            experiment.fit(console=console)
+        else:
+            experiment.run(console=console)
+
+        # If not saving data, continue here
+        if not save_data:
+            continue
+
+        # Extract relevant data
+        ## Populate a dataframe:
+        ### Must happens for all internal states in internal states
+        ### UID, pid, experiment, difficulty, scenario, model_name, log likelihood, prior_entropy, posterior_entropy, model_specs
+        ## Collect posteriors for fitting
+        if save_full_data:
+            generated_data[uid] = {}
+
+        for i, i_s in enumerate(internal_states):
+            
+            if save_full_data:
+                # Save data
+                generated_data[uid][internal_states_list[i]] = {} 
+                generated_data[uid][internal_states_list[i]]['pid'] = participant
+                generated_data[uid][internal_states_list[i]]['trial_type'] = trial_type
+                generated_data[uid][internal_states_list[i]]['trial_name'] = trial_name
+                generated_data[uid][internal_states_list[i]]['ground_truth'] = ground_truth
+                generated_data[uid][internal_states_list[i]]['posterior_map'] = i_s.MAP
+                generated_data[uid][internal_states_list[i]]['posterior_judgement'] = posterior_judgement
+                generated_data[uid][internal_states_list[i]]['prior_judgement'] = prior_judgement
+                generated_data[uid][internal_states_list[i]]['prior_entropy'] = i_s.prior_entropy
+                generated_data[uid][internal_states_list[i]]['posterior_entropy_unsmoothed'] = i_s.posterior_entropy_unsmoothed
+                if fitted_params_dict:
+                    generated_data[uid][internal_states_list[i]]['fitted_params'] = fitted_params_dict[internal_states_list[i]]
+                else:
+                    generated_data[uid][internal_states_list[i]]['fitted_params'] = None
+
+                
+
+                # Save df directly
+                if 'posteriors_at_judgements' in save_full_data:
+                    # Posteriors for each judgement and each trial
+                    ## Set up posterior dataframe for each trial and for each model
+                    ## Stored in a special folder (TBD...)
+                    judge_trial_idx, judge_link_idx = np.where(judgement_data == True)
+                    df_posteriors_trial = pd.DataFrame(columns=links_cols, data=space_triple[0])
+                    for j, j_idx in enumerate(judge_trial_idx):
+                        value = judgement_data[judge_trial_idx, judge_link_idx[j]][0]
+                        # Add judgements
+                        df_posteriors_trial[f'judgement_{j_idx}'] = df_posteriors_trial[f'link_{judge_link_idx[j]}'] == value
+                        # Add posteriors
+                        posterior_over_models = np.squeeze(i_s.posterior_over_models_byidx(j_idx))
+                        df_posteriors_trial[f'posterior_{j_idx}'] = posterior_over_models
+
+                    generated_data[uid][internal_states_list[i]]['posteriors_at_judgements'] = df_posteriors_trial
+
+                if 'entropy_history' in save_full_data:
+                    generated_data[uid][internal_states_list[i]]['entropy_history'] = i_s.entropy_history
+
+                if 'link_entropy_history' in save_full_data:
+                    generated_data[uid][internal_states_list[i]]['entropy_history'] = i_s.entropy_history_links
+
+                generated_data[uid][internal_states_list[i]]['interventions'] = inters
+                generated_data[uid][internal_states_list[i]]['data'] = data
+                generated_data[uid][internal_states_list[i]]['judgement_data'] = judgement_data
+            
+            ## Generate summary dataframe entry
+            if fitted_params_dict:
+                fitted_params = fitted_params_dict[internal_states_list[i]]
+            else: 
+                fitted_params = None
+            output = [
+                uid,
+                participant,
+                trial_type,
+                trial_name,
+                internal_states_list[i], # model name 
+                ground_truth, # ground truth model
+                i_s.MAP, # Posterior map
+                posterior_judgement,
+                prior_judgement,
+                i_s.prior_entropy, # Prior entropy
+                i_s.posterior_entropy_unsmoothed, # Unsmoothed posterior entropy
+                i_s.posterior_entropy, # Posterior entropy
+                fitted_params # Model specs, for specific parametrisations (None if irrelevant)
+            ]
+            data_output = {df.columns[i]:[output[i]] for i in range(len(df.columns))}
+            out_df = pd.DataFrame(data=data_output)
+            df = pd.concat([df, out_df])
+
+        done_idx += 1 
+
+        
+        # Save data every 5 participants and reset df
+        if save_data and done_idx % 15 == 0:
+
+            if save_full_data:
+                with open(f'./data/.models_full_data/full_data_{fit_or_run}{file_tag}.obj', 'wb') as outfile:
+                    pickle.dump(generated_data, outfile)
+
+            df_old = pd.read_csv(f'./data/general_fitting_outputs/{file_name}_{fit_or_run}{file_tag}.csv')
+            pd.concat([df_old, df], ignore_index=True).to_csv(f'./data/general_fitting_outputs/{file_name}_{fit_or_run}{file_tag}.csv', index=False)
+            # Resets dfs
+            df_old = None
+            df = pd.DataFrame(columns=cols)
+
+    
+    # Final save
+    if save_data:
+
+        if save_full_data:
+            with open(f'./data/.models_full_data/{file_name}_{fit_or_run}{file_tag}.obj', 'wb') as outfile:
+                pickle.dump(generated_data, outfile)
+
+        df_old = pd.read_csv(f'./data/general_fitting_outputs/{file_name}_{fit_or_run}{file_tag}.csv')
+        pd.concat([df_old, df], ignore_index=True).to_csv(f'./data/general_fitting_outputs/{file_name}_{fit_or_run}{file_tag}.csv', index=False)
+            
+        return pd.read_csv(f'./data/general_fitting_outputs/{file_name}_{fit_or_run}{file_tag}.csv')
+
+
+
+        
+
 # Fit models to data, independent of participant's judgement
 ## No smoothing nor temperature parameter
 
@@ -64,6 +364,10 @@ def fit_models(internal_states_list,                # List of internal states na
         ## If summary data does not exist, create it
         if not exists(f'./data/model_fitting_outputs/summary_data_{fit_or_run}{file_tag}.csv'):
             pd.DataFrame(columns=cols).to_csv(f'./data/model_fitting_outputs/summary_data_{fit_or_run}{file_tag}.csv', index=False)
+            utid_done = []
+        else:
+            df = pd.read_csv(f'./data/model_fitting_outputs/summary_data_{fit_or_run}{file_tag}.csv')
+            utid_done = df.utid.to_list()
 
         # Posterior DataFrame
         # One per internal state
@@ -100,6 +404,9 @@ def fit_models(internal_states_list,                # List of internal states na
             prior_judgement = trial_data['prior'] if 'prior' in trial_data.keys() else None
             utid = trial_data['utid']
 
+            if utid in utid_done:
+                print('utid done.')
+                continue
             # Unpack generic trial relevant parameters
             N = data.shape[0] # Number of datapoints
             K = data.shape[1] # Number of variables
@@ -185,7 +492,7 @@ def fit_models(internal_states_list,                # List of internal states na
                                                              **action_states_kwargs)
                 # Load action data if fitting
                 if fit_or_run == 'fit':
-                    a_s.load_action_data(inters, inters_fit, data)
+                    a_s.load_action_data(inters, data, inters_fit)
                 else:
                     if action_plan:
                         a_s.load_action_plan(*action_plan)
@@ -259,8 +566,12 @@ def fit_models(internal_states_list,                # List of internal states na
                         df_posteriors_trial[f'posterior_{j_idx}'] = posterior_over_models
 
                     # Save df directly
-                    generated_data[utid][internal_states_list[i]]['posteriors_at_judgements'] = df_posteriors_trial
-                    generated_data[utid][internal_states_list[i]]['entropy_history'] = i_s.entropy_history
+                    if 'posteriors_at_judgements' in save_full_data:
+                        generated_data[utid][internal_states_list[i]]['posteriors_at_judgements'] = df_posteriors_trial
+                    if 'entropy_history' in save_full_data:
+                        generated_data[utid][internal_states_list[i]]['entropy_history'] = i_s.entropy_history
+                    if 'link_entropy_history' in save_full_data:
+                        generated_data[utid][internal_states_list[i]]['entropy_history'] = i_s.entropy_history_links
                     generated_data[utid][internal_states_list[i]]['interventions'] = inters
                     generated_data[utid][internal_states_list[i]]['data'] = data
                     generated_data[utid][internal_states_list[i]]['judgement_data'] = judgement_data
@@ -624,7 +935,7 @@ def fit_participant(params_to_fit,
                                                          *models_dict['actions'][model]['params']['args'],
                                                          **action_states_kwargs)
             # Load action data
-            a_s.load_action_data(inters, inters_fit, data)
+            a_s.load_action_data(inters, data, inters_fit)
             action_states.append(a_s)
         if len(action_states) == 1: # Must be true atm, multiple action states are not supported
             action_states = action_states[0] 
@@ -872,7 +1183,7 @@ def fit_group(params_to_fit,
                                                              *models_dict['actions'][model]['params']['args'],
                                                              **action_states_kwargs)
                 # Load action data
-                a_s.load_action_data(inters, inters_fit, data)
+                a_s.load_action_data(inters, data, inters_fit)
                 action_states.append(a_s)
             if len(action_states) == 1: # Must be true atm, multiple action states are not supported
                 action_states = action_states[0] 

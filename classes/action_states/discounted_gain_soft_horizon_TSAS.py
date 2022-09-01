@@ -1,4 +1,5 @@
 from classes.action_states.action_state import Treesearch_AS
+from copy import deepcopy
 
 # Discounted gain soft horizon
 class Discounted_gain_soft_horizon_TSAS(Treesearch_AS):
@@ -16,7 +17,10 @@ class Discounted_gain_soft_horizon_TSAS(Treesearch_AS):
         else:
             new_tree = []
             for i in range(self._num_actions):
-                new_gain = gain_update_rule(i, external_state, sensory_state, internal_state)
+                new_gain, external_state_out, sensory_state_out, internal_state_out = gain_update_rule(i, 
+                                                                                                       deepcopy(external_state),  
+                                                                                                       deepcopy(sensory_state), 
+                                                                                                       deepcopy(internal_state))
                 acc_gain = gain + new_gain
 
                 # Compile sequence
@@ -29,8 +33,8 @@ class Discounted_gain_soft_horizon_TSAS(Treesearch_AS):
                 new_tree.append(new_leaf)
 
                 # Roll back for next branch exploration
-                internal_state.rollback(self._action_len)
-                sensory_state.rollback(self._action_len)
-                external_state.reset(self._action_len)
+                #internal_state.rollback(self._action_len)
+                #sensory_state.rollback(self._action_len)
+                #external_state.reset(self._action_len)
 
             return new_tree

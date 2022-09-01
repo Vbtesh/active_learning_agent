@@ -70,7 +70,14 @@ models_dict = import_states_params_asdict()
 
 # /!\ Data loss warning /!\
 save_data = True
-save_full_data = True
+
+save_full_data = [
+    #'posteriors_at_judgements',
+    'entropy_history',
+    'link_entropy_history'
+]
+#save_full_data = False
+
 # /!\ Data loss warning /!\
 console = False
 

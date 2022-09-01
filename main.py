@@ -55,9 +55,9 @@ if use_fitted_params:
     fitted_params_dict = use_fitted_params[part_key] 
 
 internal_states_list = [
-    #'normative_&_1',
+    'normative_&_1',
     #'LC_discrete_&_1',
-    'LC_discrete_att_&_att',
+    #'LC_discrete_att_&_att',
     #'change_obs_fk_&_att_cha'
 ]
 sensory_states_list = [
