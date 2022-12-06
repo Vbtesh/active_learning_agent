@@ -296,7 +296,7 @@ class Action_state():
 
 # Tree search action selection
 class Treesearch_AS(Action_state):
-    def __init__(self, N, K, behaviour, epsilon, possible_actions, action_len, policy_funcs, C, knowledge, tree_search_func, tree_search_func_args=[]):
+    def __init__(self, N, K, behaviour, epsilon, possible_actions, action_len, policy_funcs, C, knowledge, gain_type, tree_search_func, tree_search_func_args=[], resource_rational_parameter=0):
         super().__init__(N, K, behaviour, epsilon, self._tree_search_action_sample, self._tree_search_action_fit)
 
         # Num of possible action is all possible values for all variable plus 1 for staying idle
@@ -329,7 +329,14 @@ class Treesearch_AS(Action_state):
         self._action_seqs = [None for i in range(self._N+1)]
         
         self._knowledge = knowledge
-        self._C = C    
+        self._C = C  
+
+        # Gain type
+        if gain_type == 'expected_information_gained':
+            self._gain_function = self._pure_information  
+        elif gain_type == 'resource_rational':
+            self._resource_rational_parameter = resource_rational_parameter
+            self._gain_function = self._resource_rational
 
 
     def _tree_search_action_sample(self, external_state, sensory_state, internal_state):  
@@ -395,22 +402,32 @@ class Treesearch_AS(Action_state):
         # Logic for tree search based action values
         true_graph = external_state.causal_matrix
 
-        for c in range(self._C):
+        # Graph sampling done here and according to the uniform / pseudo posterior
+        #Sample graph from posterior or use knowledge
+        if type(self._knowledge) == np.ndarray:
+            # Use internal_state passed as knowledge argument
+            graphs = [internal_state._causality_matrix(self._knowledge, fill_diag=1)]
+            iterations_C = 1
+        elif self._knowledge == 'perfect':
+            graphs = [true_graph]
+            iterations_C = 1
+    
+        elif self._knowledge == 'random':
+            # Sample a internal_state from a uniform distribution
+            graphs = internal_state.posterior_sample(size=self._C, uniform=True, as_matrix=True)
+            iterations_C = self._C
+        elif self._knowledge == 'posterior_unweighted':
+            # Sample a internal_state from the current posterior
+            graphs = internal_state.posterior_sample(size=self._C, as_matrix=True)
+            iterations_C = self._C
+        elif self._knowledge == 'posterior_weighted':
+            graphs, probs = internal_state.posterior_sample(size=self._C, as_matrix=True, probs_return=True)
+            graphs_pseudoposterior = probs / probs.sum()
+            iterations_C = self._C
 
-            # Sample graph from posterior or use knowledge
-            if type(self._knowledge) == np.ndarray:
-                # Use internal_state passed as knowledge argument
-                external_state.causal_matrix = internal_state._causality_matrix(self._knowledge, fill_diag=1)
-            elif self._knowledge == 'perfect':
-                external_state.causal_matrix = true_graph
-            elif self._knowledge == 'random':
-                # Sample a internal_state from a uniform distribution
-                graph_c = internal_state.posterior_sample(uniform=True, as_matrix=True)
-                external_state.causal_matrix = graph_c
-            else:
-                # Sample a internal_state from the current posterior
-                graph_c = internal_state.posterior_sample(as_matrix=True)
-                external_state.causal_matrix = graph_c
+        for c in range(iterations_C):
+
+            external_state.causal_matrix = graphs[c]
 
             # Variable for printing, sample has 
             sample_print = external_state.causal_vector
@@ -432,10 +449,17 @@ class Treesearch_AS(Action_state):
 
             # Update action_value for time n
             if c == 0:
-                seqs_values = seqs_values_c
+                if self._knowledge == 'posterior_weighted':
+                    seqs_values = graphs_pseudoposterior[c] * seqs_values_c
+                else:
+                    seqs_values = seqs_values_c
+                    
                 action_seqs = seqs
             else:
-                seqs_values += 1/(c+1) * (seqs_values_c - seqs_values)
+                if self._knowledge == 'posterior_weighted':
+                    seqs_values += graphs_pseudoposterior[c] * seqs_values_c
+                else:
+                    seqs_values += 1/(c+1) * (seqs_values_c - seqs_values)
 
 
         self._action_seqs_values[self._n] = seqs_values
@@ -490,7 +514,9 @@ class Treesearch_AS(Action_state):
 
         posterior_entropy = internal_state.posterior_entropy_unsmoothed
 
-        return (init_entropy - posterior_entropy, external_state, sensory_state, internal_state)
+        gain = self._gain_function(action, init_entropy, posterior_entropy, sensory_state, internal_state)
+
+        return (gain, external_state, sensory_state, internal_state)
 
     
     def _average_over_sequences(self, seqs_values, seqs):
@@ -500,6 +526,26 @@ class Treesearch_AS(Action_state):
             action_values[i] = seqs_values[first_action_in_seq == i].sum()
 
         return action_values
+
+    # Gain functions
+    def _pure_information(self, action, init_entropy, posterior_entropy, sensory_state, internal_state):
+        return init_entropy - posterior_entropy
+
+    def _resource_rational(self, action, init_entropy, posterior_entropy, sensory_state, internal_state):
+        if action:
+            mask = np.ones(sensory_state.s_alt.shape, bool)
+            mask[action[0]] = False
+            #s_alt = sensory_state.s_alt[mask] 
+            direction_change = sensory_state.s_alt[mask] * sensory_state.s_alt_prev[mask]
+        else:
+            direction_change = sensory_state.s_alt * sensory_state.s_alt_prev
+
+        expected_computational_cost = np.sum(direction_change < 0)
+
+        information_gained = init_entropy - posterior_entropy 
+        ecc_omega = self._resource_rational_parameter * expected_computational_cost
+        gain = information_gained - ecc_omega
+        return gain
 
 
 class Experience_AS(Action_state):

@@ -280,7 +280,7 @@ class Discrete_IS(Internal_state):
             return self._links_to_models(self._smooth(posterior))
 
     # Samples the posterior, the number of samples is given by the size parameter
-    def posterior_sample(self, size=1, uniform=False, as_matrix=False, smoothed=False):
+    def posterior_sample(self, size=1, uniform=False, as_matrix=False, smoothed=False, probs_return=False):
         if uniform:
             graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size)
         else:
@@ -293,11 +293,18 @@ class Discrete_IS(Internal_state):
                     p = self._links_to_models(self.posterior_unsmoothed)
                 
                 graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size, p=p)
+                probs_idx = p[graph_idx]
             
         if as_matrix:
-            return self._sample_space_as_mat[graph_idx].squeeze()
+            if probs_return:
+                return self._sample_space_as_mat[graph_idx].squeeze(), probs_idx
+            else:
+                return self._sample_space_as_mat[graph_idx].squeeze()
         else:
-            return self._sample_space[graph_idx].squeeze()
+            if probs_return:
+                return self._sample_space[graph_idx].squeeze(), probs_idx
+            else:
+                return self._sample_space[graph_idx].squeeze()
 
     # PMF of the posterior for a given graph
     def posterior_PF(self, graph, log=False):
@@ -723,6 +730,276 @@ class Continuous_IS(Internal_state):
         return np.exp(d/temp) / np.exp(d/temp).sum(axis=1).reshape((d.shape[0], 1))
         
 
+
+# Internal state using a discrete probability distribution to represent the external states
+class Variational_IS(Internal_state):
+    def __init__(self, N, K, links, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, prior_param=None, smoothing=0):
+
+        super().__init__(N, K, update_func, update_func_args=update_func_args, prior_param=prior_param)
+
+        self._num_links = len(links)
+        self._dt = dt
+        self._smoothing_temp = smoothing
+        
+        self._L = links
+        
+    # Properties
+    
+    # Will only provide a posterior over causal link parameters
+    @property
+    def posterior(self):
+        posterior = self._likelihood(self._posterior_params)
+        smoothed_posterior = self._smooth_softmax(posterior)
+        return smoothed_posterior
+
+    @property
+    def posterior_unsmoothed(self):
+        return self._likelihood(self._posterior_params)
+
+    @property
+    def posterior_over_links(self):
+        if len(self.posterior.shape) == 1:
+            return self._models_to_links(self.posterior)
+        else:
+            return self.posterior
+
+    @property
+    def posterior_over_models(self):
+        if len(self.posterior.shape) == 1:
+            return self.posterior
+        else:
+            return self._links_to_models(self.posterior) 
+
+    @property
+    def MAP(self):
+        graph_idx = np.argmax(self.posterior_over_models)
+        return self._sample_space[graph_idx]
+
+    @property
+    def posterior_entropy(self):
+        return self._entropy(self.posterior_over_models)
+
+    @property
+    def posterior_entropy_unsmoothed(self):
+        if len(self.posterior_unsmoothed.shape) == 1:
+            return self._entropy(self.posterior_unsmoothed)
+        else:
+            return self._entropy(self._links_to_models(self.posterior_unsmoothed))
+
+    @property
+    def prior_entropy(self):
+        return self._prior_entropy
+
+    @property
+    def prior_entropy_over_links(self):
+        return self._prior_entropy_links
+
+    @property
+    def posterior_entropy_over_links(self):
+        return self._entropy(self.posterior_over_links)
+    
+    @property
+    def entropy_history(self):
+        posterior_history = self._likelihood(self._posterior_params_history[:self._n])
+        return self._entropy(posterior_history)
+
+    @property
+    def entropy_history_links(self):
+        if (self._posterior_params.shape) == 2:
+            posterior_history = self._likelihood(self._posterior_params_history[:self._n])
+        else:
+            posterior_history = np.array([self._models_to_links(self._likelihood(posterior)) for posterior in self._posterior_params_history[:self._n]])
+        entropy = self._entropy(posterior_history, keepdim=True)
+        return entropy
+
+    # Return a posterior over model for the given index between 0 and N
+    def posterior_over_models_byidx(self, idx):
+        posterior = self._likelihood(self._posterior_params_history[idx])
+        if len(self.posterior.shape) == 1:
+            return self._smooth(posterior)
+        else:
+            return self._links_to_models(self._smooth(posterior))
+
+    # Samples the posterior, the number of samples is given by the size parameter
+    def posterior_sample(self, size=1, uniform=False, as_matrix=False, smoothed=False, probs_return=False):
+        if uniform:
+            graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size)
+        else:
+            if smoothed:
+                graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size, p=self.posterior_over_models)
+            else:
+                if len(self.posterior_unsmoothed.shape) == 1:
+                    p = self.posterior_unsmoothed
+                else:
+                    p = self._links_to_models(self.posterior_unsmoothed)
+                
+                graph_idx = np.random.choice(np.arange(self._sample_space.shape[0]), size=size, p=p)
+                probs_idx = p[graph_idx]
+            
+        if as_matrix:
+            if probs_return:
+                return self._sample_space_as_mat[graph_idx].squeeze(), probs_idx
+            else:
+                return self._sample_space_as_mat[graph_idx].squeeze()
+        else:
+            if probs_return:
+                return self._sample_space[graph_idx].squeeze(), probs_idx
+            else:
+                return self._sample_space[graph_idx].squeeze()
+
+    # PMF of the posterior for a given graph
+    def posterior_PF(self, graph, log=False):
+        if not log:
+            return self.posterior_over_models[np.where((self._sample_space == graph).all(axis=1))[0]]
+        else:  
+            return np.log(self.posterior_over_models[np.where((self._sample_space == graph).all(axis=1))[0]])
+
+    # PMF of the posterior for a given link
+    def posterior_PF_link(self, link_idx, link_value, log=False):
+        value_idx = np.squeeze(np.where(self._L == link_value)[0])
+        if not log:
+            prob = self.posterior_over_links[link_idx, value_idx]
+            return prob
+        else:
+            log_prob = np.log(self.posterior_over_links[link_idx, value_idx])
+            return log_prob
+
+
+    # Prior initialisation
+    def _generate_prior_from_judgement(self, prior_judgement, temperature):
+
+        if type(prior_judgement) == np.ndarray:
+            prior_j = prior_judgement  
+            temp = temperature  
+        else:
+            prior_j = np.zeros(self._K**2 - self._K)
+            temp = 0
+
+        distances = ((self._sample_space - prior_j)**2).sum(axis=1)**(1/2)
+        norm_distances = 1 - distances / distances.max()
+    
+        softmax_prior = self._softmax(norm_distances, temp)
+
+        return self._models_to_links(softmax_prior)
+
+    # Background methods for likelihood and sampling for discrete distributions
+    def _likelihood(self, log_likelihood):
+        if isinstance(log_likelihood, list):
+            LL = np.array(log_likelihood[0:self._n+1])
+            # Case where likelihood is 2 dimensional (LC) and we want the whole history
+            if len(LL.shape) == 3: 
+                LL_n = LL - np.amax(LL, axis=2).reshape((LL.shape[0], LL.shape[1], 1))
+                return np.squeeze(np.exp(LL_n) / np.sum(np.exp(LL_n), axis=2).reshape((LL.shape[0], LL.shape[1], 1)))
+        else:
+            LL = log_likelihood
+
+        if len(LL.shape) == 1:
+            LL = LL.reshape(1, LL.shape[0])
+        LL_n = LL - np.amax(LL, axis=1).reshape(LL.shape[0], 1)
+        return np.squeeze(np.exp(LL_n) / np.sum(np.exp(LL_n), axis=1).reshape(LL.shape[0], 1))
+    
+
+    def _smooth(self, dist):
+        if self._smoothing_temp == None:
+            return dist
+        
+        if len(dist.shape) == 1:
+            dist = dist.reshape((1, dist.size))
+
+        indices = np.tile(np.arange(dist.shape[1]), (dist.shape[0], 1))
+        max_dist = np.argmax(dist, axis=1).reshape((dist.shape[0], 1))
+
+        smoother = ( dist.shape[1] - np.abs(indices - max_dist) ) / dist.shape[1]
+
+        certainty_coef = np.exp(- self._entropy(dist, custom=True)) * self._smoothing_temp
+
+        smoothed_values = dist + certainty_coef * smoother
+
+        return smoothed_values / smoothed_values.sum(axis=1).reshape((dist.shape[0], 1))
+
+    def _smooth_softmax(self, dist):
+        if self._smoothing_temp == None:
+            return dist
+        
+        if len(dist.shape) == 1:
+            dist_n = dist.reshape((1, dist.size))
+        else:
+            dist_n = dist
+            
+        exp_dist = np.exp(dist_n * self._smoothing_temp)
+        norm = exp_dist.sum(axis=1).reshape((exp_dist.shape[0], 1))
+
+        new_dist = (exp_dist / norm).reshape(dist.shape)
+        return new_dist
+
+
+    def _entropy(self, distribution, custom=False, keepdim=False):
+        log_dist = np.log2(distribution, where=distribution!=0)
+        log_dist[log_dist == -np.inf] = 0
+
+        if len(distribution.shape) == 1 or custom:
+            return - np.sum(distribution * log_dist)
+        elif len(distribution.shape) == 3 and keepdim:
+            return - np.squeeze(np.sum(distribution * log_dist, axis=2))
+        elif len(distribution.shape) == 3:
+            return - np.squeeze(np.sum(distribution * log_dist, axis=2).sum(axis=1))
+        else:
+            return - np.sum(distribution * log_dist, axis=1)
+
+
+    def _models_to_links(self, models_probs, intervention=None):
+        s = self._K**2 - self._K
+        links_probs = np.zeros((s, self._num_links))
+        for j in range(s):
+            for k in range(self._num_links):
+                links_probs[j, k] = np.sum(models_probs[self._indexed_space[:,j] == k])
+
+        if intervention:
+            links_probs[self.causes_idx[intervention], :] = 0 # Not sure yet about value
+            
+        return links_probs
+
+
+    def _links_to_models(self, links_probs):
+        return links_probs[np.arange(links_probs.shape[0]), self._indexed_space].prod(axis=1)
+
+    
+    # Sample space related methods
+    def add_sample_space_env(self, triple_of_spaces):
+        # Add sample space manually
+        self._sample_space, self._indexed_space, self._sample_space_as_mat = triple_of_spaces
+
+
+    def _build_space(self, links, as_matrix=False):
+        a = links 
+        c = len(links)
+        s = self._K**2 - self._K
+
+        S = np.zeros((c**s, s))
+
+        for i in range(s):
+            ou = np.tile(a, (int(c**(s-i-1)), 1)).flatten('F')
+            os = tuple(ou for _ in range(c**i))
+            o = np.concatenate(os)
+
+            S[:, i] = o.T
+        
+        if not as_matrix:
+            return S
+        else:
+            S_mat = np.zeros((c**s, self._K, self._K))
+
+            for i in range(c**s):
+                S_mat[i, :, :] = self._causality_matrix(S[i, :], fill_diag=1)
+            
+            return S_mat
+
+    
+    def _softmax(self, d, temp=1):
+        if len(d.shape) == 1:
+            return np.exp(d*temp) / np.exp(d*temp).sum()
+        else:
+            return np.exp(d*temp) / np.exp(d*temp).sum(axis=1, keepdims=1)
 
 
     

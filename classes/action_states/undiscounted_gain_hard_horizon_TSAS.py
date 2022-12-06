@@ -3,9 +3,9 @@ from copy import deepcopy
 
 # Undiscounted gain hard horizon
 class Undiscounted_gain_hard_horizon_TSAS(Treesearch_AS):
-    def __init__(self, N, K, behaviour, epsilon, possible_actions, action_len, policy_funcs, C, knowledge, depth):
+    def __init__(self, N, K, behaviour, epsilon, possible_actions, action_len, policy_funcs, C, knowledge, gain_type, depth, resource_rational_parameter=0):
         self._depth = depth
-        super().__init__(N, K, behaviour, epsilon, possible_actions, action_len, policy_funcs, C, knowledge, self._build_tree_ughh, tree_search_func_args=[self._depth])
+        super().__init__(N, K, behaviour, epsilon, possible_actions, action_len, policy_funcs, C, knowledge, gain_type, self._build_tree_ughh, tree_search_func_args=[self._depth],  resource_rational_parameter=resource_rational_parameter)
 
     
     def _build_tree_ughh(self, gain, external_state, sensory_state, internal_state, gain_update_rule, depth, seq=''):

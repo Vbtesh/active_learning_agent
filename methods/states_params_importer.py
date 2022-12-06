@@ -94,11 +94,14 @@ behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
 epsilon = 0.1 # Certainty threshold: agent stops intervening after entropy goes below epsilon
 
 ## Tree search action states
-tree_search_poss_actions = np.arange(-100, 101, step=10) # Possible actions to perform for tree search alg.
+tree_search_poss_actions = np.arange(-100, 101, step=25) # Possible actions to perform for tree search alg.
 #tree_search_poss_actions = np.array([-90, 90])
 action_len = 0#1/dt # Length between each action selection in frames (1 second is baseline)
 C = 5 # Number of model to sample from the posterior
-knowledge = False  # Can be a model as nd.array, 'perfect' for perfect knowledge, 'random' for random sampling and False for posterior based sampling
+knowledge = 'posterior_unweighted'  # Can be a model as nd.array, 'posterior_unweighted', 'posterior_weighted', 'perfect' for perfect knowledge and 'random' for random sampling
+# Gain parameters
+gain_type = 'expected_information_gained'
+resource_rational_parameter = 0.1
 ### Hard horizon
 depth = 1 # Target depth for hard horizon undiscounted gain  
 ### Soft horizon
@@ -107,6 +110,7 @@ discount = 0.01 # For soft horizon discounted gain
 ### Action selection policy
 action_temperature = 1
 softmax_policy_funcs = epsilon_greedy_init(0)#softmax_policy_init(action_temperature)
+
 
     
 ## Experience Value Acting Observing (vao) action states
@@ -613,10 +617,13 @@ def import_states_params_asdict():
                         softmax_policy_funcs,
                         C,
                         knowledge,
+                        gain_type,
                         discount,
                         horizon
                     ],
-                    'kwargs': {}
+                    'kwargs': {
+                        'resource_rational_parameter': resource_rational_parameter
+                    }
                 }
             },
             'tree_search_hard_horizon': {
@@ -630,9 +637,12 @@ def import_states_params_asdict():
                         softmax_policy_funcs,
                         C,
                         knowledge,
+                        gain_type,
                         depth
                     ],
-                    'kwargs': {}
+                    'kwargs': {
+                        'resource_rational_parameter': resource_rational_parameter
+                    }
                 }
                 
             },
@@ -670,4 +680,3 @@ def import_states_params_asdict():
         }
     }
     return params_dict
-

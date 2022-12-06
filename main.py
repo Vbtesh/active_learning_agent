@@ -11,6 +11,9 @@ from classes.agent import Agent
 from methods.states_params_importer import import_states_params_asdict
 from methods.action_plans import generate_action_plan
 
+from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
+from classes.action_states.undiscounted_gain_hard_horizon_TSAS import Undiscounted_gain_hard_horizon_TSAS
+
 
 ## Import behavioural experiment
 with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:
@@ -19,10 +22,15 @@ with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/gl
 print(len(modelling_data.keys()))
 
 models_dict = import_states_params_asdict()
+# Change to default parameters
+
+# active states
+models_dict['actions']['tree_search_hard_horizon']['params']['args'][-2] = 'resource_rational'#'expected_information_gained'
+models_dict['actions']['tree_search_hard_horizon']['params']['kwargs']['resource_rational_parameter'] = 1
 
 part_key = '5fb91837b8c8756d924f7351'
 conditions = ['generic_0', 'congruent', 'incongruent', 'implausible']
-cond = conditions[1]
+cond = conditions[0]
 
 # Model fitting
 fit_or_run = False # If false, no data will be used 
@@ -46,6 +54,7 @@ prior_judgement = trial_data['prior'] if 'prior' in trial_data.keys() else None
 utid = trial_data['utid']
 
 
+
 use_fitted_parameters = True
 if use_fitted_parameters:
     with open('./data/params_fitting_outputs/fitted_params.json', 'r') as infile:
@@ -55,8 +64,8 @@ if use_fitted_params:
     fitted_params_dict = use_fitted_params[part_key] 
 
 internal_states_list = [
-    'normative_&_1',
-    #'LC_discrete_&_1',
+    #'normative_&_1',
+    'LC_discrete_&_1',
     #'LC_discrete_att_&_att',
     #'change_obs_fk_&_att_cha'
 ]
@@ -157,7 +166,7 @@ for model in action_states_list:
             a_s.load_action_plan(*action_plan)
         else:
             # If no action plan, behaviour is random
-            a_s._behaviour = 'random' # Can be random or actor
+            a_s._behaviour = 'actor' # Can be random or actor
 
     action_states.append(a_s)
 
