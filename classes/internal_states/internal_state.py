@@ -733,7 +733,7 @@ class Continuous_IS(Internal_state):
 
 # Internal state using a discrete probability distribution to represent the external states
 class Variational_IS(Internal_state):
-    def __init__(self, N, K, links, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, prior_param=None, smoothing=0):
+    def __init__(self, N, K, links, dt, update_func, update_func_args=[], generate_sample_space=True, prior_param=None, smoothing=0):
 
         super().__init__(N, K, update_func, update_func_args=update_func_args, prior_param=prior_param)
 
@@ -742,19 +742,46 @@ class Variational_IS(Internal_state):
         self._smoothing_temp = smoothing
         
         self._L = links
+
+        # Build representational spaces
+        ## if generate sample space == True, build sample space, else, wait for call of the add_sample_space method call
+        if generate_sample_space:
+            self._sample_space = self._build_space(links) # Sample space as set of vectors with link values
+            self._indexed_space = self._build_space(np.arange(len(links))).astype(int) # Same as above but link values are indices
+            self._sample_space_as_mat = self._build_space(links, as_matrix=True) # Sample space as a set of causality matrices, i.e. one for each model
+        else:
+            self._sample_space = None
+            self._indexed_space = None
+            self._sample_space_as_mat = None
         
     # Properties
-    
+    # Specific properties
+    @property
+    def variational_posterior(self):
+        ## Qs are the unnormalised log posterior, need to loop over them and take exp and normalise
+        posterior_factors = [np.exp(factor) / np.exp(factor).sum() for factor in self._Qs]
+        return posterior_factors
+
+    # Entropy over all parameters
+    @property
+    def variational_entropy(self):
+        posterior_factors = [np.exp(factor) / np.exp(factor).sum() for factor in self._Qs]
+        posterior_entropies = np.array([self._entropy(factor) for factor in posterior_factors])
+        return posterior_entropies
+
+    # Standard properties
     # Will only provide a posterior over causal link parameters
     @property
     def posterior(self):
-        posterior = self._likelihood(self._posterior_params)
+        posterior_links = np.vstack(self._posterior_params[self._link_params_bool])
+        posterior = self._likelihood(posterior_links)
         smoothed_posterior = self._smooth_softmax(posterior)
         return smoothed_posterior
 
     @property
     def posterior_unsmoothed(self):
-        return self._likelihood(self._posterior_params)
+        posterior_links = np.vstack(self._posterior_params[self._link_params_bool])
+        return self._likelihood(posterior_links)
 
     @property
     def posterior_over_links(self):
@@ -800,21 +827,21 @@ class Variational_IS(Internal_state):
     
     @property
     def entropy_history(self):
-        posterior_history = self._likelihood(self._posterior_params_history[:self._n])
+        link_params_history = [np.vstack(posterior_param[self._link_params_bool]) for posterior_param in self._posterior_params_history[:self._n]]
+        posterior_history = self._likelihood(link_params_history)
         return self._entropy(posterior_history)
 
     @property
     def entropy_history_links(self):
-        if (self._posterior_params.shape) == 2:
-            posterior_history = self._likelihood(self._posterior_params_history[:self._n])
-        else:
-            posterior_history = np.array([self._models_to_links(self._likelihood(posterior)) for posterior in self._posterior_params_history[:self._n]])
+        link_params_history = [np.vstack(posterior_param[self._link_params_bool]) for posterior_param in self._posterior_params_history[:self._n]]
+        posterior_history = self._likelihood(link_params_history)
         entropy = self._entropy(posterior_history, keepdim=True)
         return entropy
 
     # Return a posterior over model for the given index between 0 and N
     def posterior_over_models_byidx(self, idx):
-        posterior = self._likelihood(self._posterior_params_history[idx])
+        log_posterior = np.vstack(self._posterior_params_history[idx][self._link_params_bools])
+        posterior = self._likelihood(log_posterior)
         if len(self.posterior.shape) == 1:
             return self._smooth(posterior)
         else:
@@ -963,12 +990,11 @@ class Variational_IS(Internal_state):
     def _links_to_models(self, links_probs):
         return links_probs[np.arange(links_probs.shape[0]), self._indexed_space].prod(axis=1)
 
-    
+
     # Sample space related methods
     def add_sample_space_env(self, triple_of_spaces):
         # Add sample space manually
         self._sample_space, self._indexed_space, self._sample_space_as_mat = triple_of_spaces
-
 
     def _build_space(self, links, as_matrix=False):
         a = links 
