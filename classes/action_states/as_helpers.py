@@ -11,3 +11,5 @@ class Pseudo_AS():
             self.a_real = action
         else:
             self.realised = False
+
+        self.simulate = True

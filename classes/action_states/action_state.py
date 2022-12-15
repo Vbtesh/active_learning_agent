@@ -49,6 +49,9 @@ class Action_state():
         # Set realised to False by default
         self._realised = False
 
+        # Set simulate to False as it is a true active state
+        self.simulate = False
+
 
     # Core method, samples an action by computing action values and selecting one action according to the given policy
     def sample(self, external_state, sensory_state, internal_state):

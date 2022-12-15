@@ -25,8 +25,8 @@ models_dict = import_states_params_asdict()
 # Change to default parameters
 
 # active states
-models_dict['actions']['tree_search_hard_horizon']['params']['args'][-2] = 'resource_rational'#'expected_information_gained'
-models_dict['actions']['tree_search_hard_horizon']['params']['kwargs']['resource_rational_parameter'] = 1
+#models_dict['actions']['tree_search_hard_horizon']['params']['args'][-2] = 'resource_rational'#'expected_information_gained'
+#models_dict['actions']['tree_search_hard_horizon']['params']['kwargs']['resource_rational_parameter'] = 1
 
 part_key = '5fb91837b8c8756d924f7351'
 conditions = ['generic_0', 'congruent', 'incongruent', 'implausible']
@@ -46,6 +46,7 @@ model_name = trial_data['name'][:-2]
 difficulty = cond
 data = trial_data['data'] # Raw numerical data of variable values
 ground_truth = trial_data['ground_truth'] # Ground truth model from which data has been generated
+ground_truth = np.array([1, 0, 0, 1, 0, 0])
 inters = trial_data['inters'] # Interventions as is
 inters_fit = trial_data['inters_fit'] # Interventions with removed movements
 judgement_data = trial_data['links_hist'] # Change in judgement sliders
@@ -65,9 +66,10 @@ if use_fitted_params:
 
 internal_states_list = [
     #'normative_&_1',
-    'LC_discrete_&_1',
+    #'LC_discrete_&_1',
     #'LC_discrete_att_&_att',
-    #'change_obs_fk_&_att_cha'
+    #'change_obs_fk_&_att_cha',
+    'mean_field_vis'
 ]
 sensory_states_list = [
     'omniscient'
@@ -185,10 +187,11 @@ experiment = Experiment(agent, external_state)
 
 
 # Run experiment
+verbose = True
 if fit_or_run == 'fit':
-    experiment.fit()
+    experiment.fit(verbose=verbose)
 else:
-    experiment.run()
+    experiment.run(verbose=verbose)
 
 pass
 #experiment.entropy_report()

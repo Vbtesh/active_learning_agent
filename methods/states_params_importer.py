@@ -11,6 +11,7 @@ from classes.internal_states.change_based_CIS import LC_linear_change_CIS
 from classes.internal_states.change_based_DIS import LC_linear_change_DIS
 from classes.internal_states.lc_interfocus_DIS import Local_computations_interfocus_DIS
 from classes.internal_states.causal_event_segmentation_DIS import causal_event_segmentation_DIS
+from classes.internal_states.mean_field_VIS import MeanField_VIS
 
 from classes.action_states.discounted_gain_soft_horizon_TSAS import Discounted_gain_soft_horizon_TSAS
 from classes.action_states.undiscounted_gain_hard_horizon_TSAS import Undiscounted_gain_hard_horizon_TSAS
@@ -31,7 +32,8 @@ def import_states_asdict():
             'LC_discrete_attention': Local_computations_interfocus_DIS,
             'change_discrete': LC_linear_change_DIS,
             'change_continuous': LC_linear_change_CIS,
-            'causal_event_segmentation': causal_event_segmentation_DIS
+            'causal_event_segmentation': causal_event_segmentation_DIS,
+            'mean_field_vis': MeanField_VIS
         },
         'actions': {
             'tree_search_soft_horizon': Discounted_gain_soft_horizon_TSAS,
@@ -61,6 +63,7 @@ ground_truth = np.zeros(K**2 - K)  # Ground truth model generating the data: /!\
 
 # INTERNAL STATE parameters
 L = np.array([-1, -1/2, 0, 1/2, 1]) # Possible link values
+#L = np.array([-1, 0, 1])
 prior_param = 0 # Priors param: temperature for discrete and variance form continuous /!\ Depends on the trial /!\
 beta = 40 # Temperature for the softmax smothing function, will be fitted
 
@@ -83,6 +86,21 @@ ce_threshold = 0.3 # Causal event threshold (read as a percentage of bounds)
 time_threshold = 10  # The time threshold in frames before is strong, after is weak
 guess = 0.3 # The probability mass to be shared among other possibilities
 beta_ces = 4
+
+# Variational agent
+certainty_threshold = 0.1
+parameter_set = {
+    'theta': {
+        'values': np.array([0.1, 0.5, 1, 3]),
+        'prior': np.ones(4) / 4,
+        'type': 'no_link'
+    },
+    'sigma': {
+        'values': np.array([0.5, 1, 3, 6]),
+        'prior': np.ones(4) / 4,
+        'type': 'no_link'
+    },
+}
 
 # SENSORY STATES parameters
 change_memory = 1 # 1 means no smoothing, just look at raw change
@@ -175,6 +193,11 @@ def params_to_fit_importer(internal_state,
             1 + 1e-1*np.random.normal() * random_increment,
             (0, 550),
             ['prior_param']
+        ],
+        'certainty_threshold': [
+            np.abs(0.1 + 1e-2*np.random.normal() * random_increment),
+            (1e-2, 10),
+            ['certainty_threshold']
         ]
     }
 
@@ -254,6 +277,17 @@ def params_to_fit_importer(internal_state,
         internal_params_labels.append(params_dict['smoothing'][2] + [idx])
         idx += 1
 
+    elif internal_state == 'mean_field_vis':
+        
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+
+        params_initial_guesses.append(params_dict['certainty_threshold'][0])
+        params_bounds.append(params_dict['certainty_threshold'][1])
+        internal_params_labels.append(params_dict['certainty_threshold'][2] + [idx])
+        idx += 1
 
 
     if fitting_prior:
@@ -598,6 +632,22 @@ def import_states_params_asdict():
                     ],
                     'kwargs': {
                         'decay_rate': decay_rate,
+                        'prior_param': prior_param,
+                        'smoothing': beta
+                    }
+                }
+                
+            },
+            'mean_field_vis': {
+                'object': MeanField_VIS,
+                'params': {
+                    'args': [
+                        L,
+                        dt,
+                        parameter_set
+                    ],
+                    'kwargs': {
+                        'certainty_threshold': certainty_threshold,
                         'prior_param': prior_param,
                         'smoothing': beta
                     }

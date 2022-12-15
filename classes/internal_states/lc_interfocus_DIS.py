@@ -43,7 +43,6 @@ class Local_computations_interfocus_DIS(Discrete_IS):
             self._power_update_coef = self._partial_attention
             self._varfocus = False
 
-        
 
         self._last_action = None
         self._last_action_len = None

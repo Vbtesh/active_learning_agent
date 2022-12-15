@@ -733,7 +733,7 @@ class Continuous_IS(Internal_state):
 
 # Internal state using a discrete probability distribution to represent the external states
 class Variational_IS(Internal_state):
-    def __init__(self, N, K, links, dt, update_func, update_func_args=[], generate_sample_space=True, prior_param=None, smoothing=0):
+    def __init__(self, N, K, links, dt, parameter_set, update_func, update_func_args=[], generate_sample_space=True, prior_param=None, smoothing=0):
 
         super().__init__(N, K, update_func, update_func_args=update_func_args, prior_param=prior_param)
 
@@ -742,6 +742,20 @@ class Variational_IS(Internal_state):
         self._smoothing_temp = smoothing
         
         self._L = links
+
+        # Complete parameter set
+        self._param_names_list, self._parameter_set = self._complete_parameter_set(parameter_set)
+        self._num_factors = len(self._param_names_list)
+        self._param_index_list = np.arange(len(self._param_names_list))
+ 
+        self._link_params_bool = np.ones(self._num_factors, dtype=bool)
+        for i, name in enumerate(self._param_names_list):
+            if self._parameter_set[name]['type'] == 'no_link':
+                self._link_params_bool[i] = 0
+
+        self._link_names_matrix = self._construct_link_matrix(K)
+
+        self._param_subsets_dict = self._construct_parameter_subset_dict()
 
         # Build representational spaces
         ## if generate sample space == True, build sample space, else, wait for call of the add_sample_space method call
@@ -759,13 +773,14 @@ class Variational_IS(Internal_state):
     @property
     def variational_posterior(self):
         ## Qs are the unnormalised log posterior, need to loop over them and take exp and normalise
-        posterior_factors = [np.exp(factor) / np.exp(factor).sum() for factor in self._Qs]
+        posterior_factors = np.array([self._likelihood(factor) for factor in self._posterior_params], dtype=object)
         return posterior_factors
 
     # Entropy over all parameters
     @property
-    def variational_entropy(self):
-        posterior_factors = [np.exp(factor) / np.exp(factor).sum() for factor in self._Qs]
+    def variational_posterior_entropy(self):
+        posterior_factors_partition = [np.exp(factor).sum() for factor in self._posterior_params]
+        posterior_factors = [self._likelihood(factor) for factor in self._posterior_params]
         posterior_entropies = np.array([self._entropy(factor) for factor in posterior_factors])
         return posterior_entropies
 
@@ -1026,6 +1041,110 @@ class Variational_IS(Internal_state):
             return np.exp(d*temp) / np.exp(d*temp).sum()
         else:
             return np.exp(d*temp) / np.exp(d*temp).sum(axis=1, keepdims=1)
+
+
+    def _complete_parameter_set(self, parameter_set_non_causal):
+        links_matrix = self._construct_link_matrix(self._K)
+        parameter_set = parameter_set_non_causal
+        eye = np.eye(self._K, dtype=bool)
+
+        no_link_names = [k for k in parameter_set.keys()]
+        num_no_links = len([k for k in parameter_set.keys()])
+        num_links = self._K*(self._K-1)
+
+        for i, name in enumerate(no_link_names):
+            dep_as_bool = np.zeros(num_no_links, dtype=bool)
+            dep_as_bool[i] = 1
+            parameter_set[name]['dependencies_as_bool'] = np.concatenate((~dep_as_bool, np.zeros(num_links, dtype=bool)))
+            parameter_set[name]['dependencies_as_str'] = np.array(no_link_names, dtype=object)[~dep_as_bool]
+
+        for i in range(self._K):
+            for j in range(self._K):
+                if i != j:
+                    parameter_set[links_matrix[i, j]] = {
+                        'values': self._L,
+                        'prior': np.ones(self._L.size) / self._L.size, 
+                        'type': 'link'
+                    }
+                    dep_as_bool_nl = np.ones(num_no_links, dtype=bool)
+
+                    dep_as_bool = np.zeros((self._K, self._K), dtype=bool)
+                    other_cause = np.zeros(self._K, dtype=bool)
+                    other_link = None
+                    for k in range(self._K):
+                        if k != i and k != j:
+                            other_cause[k] = 1
+                            other_link = links_matrix[k, j]
+
+                    dep_as_bool[other_cause, j] = 1
+
+                    parameter_set[links_matrix[i, j]]['dependencies_as_bool'] = np.concatenate((dep_as_bool_nl, dep_as_bool[~eye]), dtype=bool)
+                    parameter_set[links_matrix[i, j]]['dependencies_as_str'] = np.array(no_link_names + [other_link], dtype=object)
+
+        names = np.concatenate((np.array(no_link_names, dtype=object), links_matrix[~eye]), dtype=object)
+        return names, parameter_set
+    
+
+    def _construct_link_matrix(self, K):
+        G = np.empty((K, K), dtype=object)
+
+        for i in range(K):
+            for j in range(K):
+                if i == j:
+                    G[i, j] = ''
+                else:
+                    G[i, j] = f'{i}->{j}'
+        
+        return G
+
+    """
+    Constructs a 2D array containing all the value combinations for a set of parameter labels
+    Crucial for quicker updates.
+    """
+    def _construct_parameter_combinations(self, param_labels, param_values):
+        num_values = np.array([p_v.size for p_v in param_values])
+
+        c = len(param_labels) # Number of parameters (columns)
+        r = num_values.prod() # Number of tuples (rows)
+        S = np.zeros((r, c))
+        for i in range(c):
+            tile_coef = int(num_values[i+1:].prod())
+            rep_coef = int(num_values[:i].prod())
+            ou = np.tile(param_values[i], (int(tile_coef), 1)).flatten('F')
+            o = ou[np.tile(np.arange(ou.size), (1, rep_coef)).flatten()]
+            S[:, i] = o.T
+
+        return S
+
+
+    """
+    Constructs a dictionary
+    keys: the relevant parameter subsets needed for update as stringified lists
+    values: the parameter value space as nd.array with row is a combination and columns are parameters in order given by the key 
+    """
+    def _construct_parameter_subset_dict(self):
+        subsets = {}
+        all_links = self._link_names_matrix[~np.eye(self._K, dtype=bool)]
+
+        # Links
+        for k in self._param_names_list[self._link_params_bool]:
+            sub = self._param_names_list[~self._link_params_bool].tolist() + [k]
+            values = [self._parameter_set[p]['values'] for p in sub]
+            subsets[','.join(sub)] = self._construct_parameter_combinations(sub, values)
+
+        # Other parameters 
+        ## Depend on interventions
+        for nl in self._param_names_list[~self._link_params_bool]:
+            sub = [nl] + self._param_names_list[self._link_params_bool].tolist()
+            values = [self._parameter_set[p]['values'] for p in sub]
+            subsets[','.join(sub)] = self._construct_parameter_combinations(sub, values)
+            for a in range(self._K):
+                links_loc = [link for link in all_links if int(link[-1]) != a]
+                sub = [nl] + links_loc
+                values = [self._parameter_set[p]['values'] for p in sub]
+                subsets[','.join(sub)] = self._construct_parameter_combinations(sub, values)
+
+        return subsets
 
 
     

@@ -21,12 +21,12 @@ class Experiment():
             self._entropy_history = np.zeros((self._iter, agent._multi_is, self.agent._N))
 
 
-    def fit(self, console=False, reset=False):
+    def fit(self, verbose=False, reset=False):
         if not self.external_state._realised and self.agent.realised:
             print('Cannot fit, no loaded data, use Experiment.run instead. Exiting...')
             return
 
-        if console:
+        if verbose:
             print('True model:', self.external_state.causal_vector) 
         if reset:
             self.agent.reset()
@@ -47,12 +47,12 @@ class Experiment():
             ## Done after as this will define the next action sampled
             self.agent.fit_action(self.external_state)
 
-            if n % 10 == 0 and console:
+            if n % 10 == 0 and verbose:
                 print('Iter:', n, 'Current MAP:', self.agent.MAP, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.posterior_entropy)
 
             self._n += 1
 
-        if console:
+        if verbose:
             print('Iter:', n, 'Current MAP:', self.agent.MAP, 'Current LL:', self.agent.log_likelihood, 'Entropy:', self.agent.posterior_entropy)
             if self.agent.fitting_judgement:
                 print('True model:', self.external_state.causal_vector, 'Posterior_judgement:', self.agent.final_judgement)
@@ -65,11 +65,11 @@ class Experiment():
                 final_distance = self.agent.MAP
                 print('Final distance:', np.sum((self.agent.final_judgement - final_distance)**2)**(-1/2))
 
-    def run(self, console=False, reset=False):     
+    def run(self, verbose=False, reset=False):     
         self._i = 0
 
         for i in range(self._iter):
-            if console:
+            if verbose:
                 print('True model:', self.external_state.causal_vector) 
                 print(f'\n Realisation {i+1} out of {self._iter}: \n')
 
@@ -90,14 +90,14 @@ class Experiment():
 
                 
 
-                if n % 10 == 0 and console:
+                if n % 10 == 0 and verbose:
                     print('Iter:', n)
                     print('Current MAP:', self.agent.MAP, 'Entropy:', self.agent.posterior_entropy)
                     #print('Current posterior:')
                     #print(np.around(agent.model.posterior_links, 2))
 
 
-            if console:
+            if verbose:
                 print('Iter:', n)
                 print('True model:', self.external_state.causal_vector, 'Final MAP:', self.agent.MAP)
 
