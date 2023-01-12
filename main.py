@@ -52,14 +52,17 @@ inters_fit = trial_data['inters_fit'] # Interventions with removed movements
 judgement_data = trial_data['links_hist'] # Change in judgement sliders
 posterior_judgement = trial_data['posterior'] # Final states of judgement sliders
 prior_judgement = trial_data['prior'] if 'prior' in trial_data.keys() else None
+#prior_judgement = ground_truth
 utid = trial_data['utid']
 
 
 
-use_fitted_parameters = True
+use_fitted_parameters = False
 if use_fitted_parameters:
     with open('./data/params_fitting_outputs/fitted_params.json', 'r') as infile:
         use_fitted_params = json.load(infile)
+else:
+    use_fitted_params = False
 
 if use_fitted_params:
     fitted_params_dict = use_fitted_params[part_key] 

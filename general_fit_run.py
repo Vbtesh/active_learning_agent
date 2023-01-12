@@ -11,7 +11,8 @@ from methods.states_params_importer import import_states_params_asdict
 ## Import behavioural experiment
 #with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:
 #with open('./data/.modelling_data_manipulated/congruence_inverted_CI.obj', 'rb') as inFile:
-with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/intervention_db.obj', 'rb') as inFile:
+#with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/intervention_db.obj', 'rb') as inFile:
+with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:
     modelling_data = pickle.load(inFile)
 
 experiments = [
@@ -67,7 +68,11 @@ if use_fitted_parameters:
         #if 'LC_discrete_&' in model:
         #    internal_states_list.append(model)
 else:
-    internal_states_list = ['normative_&_1']
+    internal_states_list = [
+        #'normative_&_1',
+        'LC_discrete_&_1',
+        #'LC_discrete_att_&_att'
+    ]
 
 action_states_list = [
     #'experience_vao',
@@ -87,7 +92,7 @@ save_full_data = [
     'link_entropy_history'
 ]
 # /!\ Data loss warning /!\
-console = False
+verbose = False
 
 # Action plan
 # Possible plans
@@ -97,13 +102,13 @@ console = False
 ## 'actor': /!\ ONLY ONE INTERNAL STATE AT A TIME /!\ will use the action states specified in action_states_list 
 ## 'obs': will stay idle
 ## 'random': will pick random actions
-use_action_plan = None
+use_action_plan = 'actor'
 
 # Fit or run
-fit_or_run = 'fit'
+fit_or_run = 'run'
 
 # Add tag at end of file
-tag = '_inters'
+tag = '_OA'
 
 
 print('CONFIGURATION')
@@ -130,5 +135,5 @@ generalised_model_fitting(internal_states_list,
                           use_fitted_params=use_fitted_parameters,
                           save_data=save_data,
                           save_full_data=save_full_data,
-                          console=console,
+                          verbose=verbose,
                           file_tag=tag)

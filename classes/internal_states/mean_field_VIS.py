@@ -61,7 +61,7 @@ class MeanField_VIS(Variational_IS):
         X_prev = sensory_state.s_prev
 
         # Update all each data point 
-        self._update_schedule = np.ones(self._num_factors, dtype=bool)
+        #self._update_schedule = np.ones(self._num_factors, dtype=bool)
         self._update_schedule[~self._link_params_bool] = 1 
 
         params_to_update = self._param_names_list[self._update_schedule]
@@ -115,6 +115,9 @@ class MeanField_VIS(Variational_IS):
             data_log_probability_unnormalised = np.sum(expectation_probabilities.prod(axis=1) * expectation_quantities, axis=1)
             
             # Update considered belief
+            if not action_state.simulate:
+                a = 1
+                pass
             self._posterior_params[params_to_update_indices[i]] += data_log_probability_unnormalised
             #self._posterior_params[params_to_update_indices[i]] - np.amax(self._posterior_params[params_to_update_indices[i]])
 
@@ -144,7 +147,8 @@ class MeanField_VIS(Variational_IS):
         
         self._update_schedule = np.zeros(self._num_factors, dtype=bool)
         prior_entropy = np.array([self._entropy(self._likelihood(factor)) for factor in self._prior_params])
-        self._update_schedule[np.argmax(prior_entropy)] = 1
+        select = np.random.choice(np.arange(prior_entropy.size), p=np.ones(prior_entropy.size)/prior_entropy.size)
+        self._update_schedule[select] = 1
 
         # Init history and set first entry to fist
         self._update_schedule_history = np.zeros((self._N+1, self._num_factors))
@@ -174,7 +178,7 @@ class MeanField_VIS(Variational_IS):
                 self._update_schedule[np.argmax(self.variational_posterior_entropy)] = 1
         else:
             # Check each entropy
-            certainty = self.variational_posterior_entropy[self._update_schedule] < self._epsilon
+            certainty = np.logical_and(self._update_schedule, self.variational_posterior_entropy < self._epsilon)
             
             if np.sum(certainty) == np.sum(self._update_schedule):
                 # if all certainty threshold are met, reset schedule
@@ -244,7 +248,7 @@ class MeanField_VIS(Variational_IS):
 
             if belief_name == 'theta':
                 mus = thetas.reshape((thetas.size, 1)) * (X_prev @ links + regularisor - X_prev[k]) * self._dt
-                out += stats.norm.logpdf(X[k], loc=mus, scale=sigmas)
+                out += stats.norm.logpdf(X[k] - X_prev[k], loc=mus, scale=sigmas*np.sqrt(self._dt))
             else:
                 mus = thetas * (X_prev @ links + regularisor - X_prev[k]) * self._dt
                 out += stats.norm.logpdf(X[k] - X_prev[k], loc=mus, scale=sigmas.reshape((sigmas.size, 1))*np.sqrt(self._dt))

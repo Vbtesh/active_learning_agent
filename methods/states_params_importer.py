@@ -65,11 +65,11 @@ ground_truth = np.zeros(K**2 - K)  # Ground truth model generating the data: /!\
 L = np.array([-1, -1/2, 0, 1/2, 1]) # Possible link values
 #L = np.array([-1, 0, 1])
 prior_param = 0 # Priors param: temperature for discrete and variance form continuous /!\ Depends on the trial /!\
-beta = 40 # Temperature for the softmax smothing function, will be fitted
+beta = 1 # Temperature for the softmax smoothing function, will be fitted
 
 ## Attention based internal states
-decay_rate = 1 # Discount rate of attention 
-decay_type = 'sigmoid' # Functional form of attention parameter: 'exponential' or 'sigmoid'
+decay_rate = 0.4 # Discount rate of attention 
+decay_type = 'exponential' # Functional form of attention parameter: 'exponential' or 'sigmoid'
 
 ## Normative and LC
 ### N/A: use OU parameters
@@ -103,6 +103,7 @@ parameter_set = {
 }
 
 # SENSORY STATES parameters
+noise_std = 0 * dt
 change_memory = 1 # 1 means no smoothing, just look at raw change
 change_type = 'raw' # Can be 'normalised', 'relative', 'raw'
 
@@ -114,7 +115,7 @@ epsilon = 0.1 # Certainty threshold: agent stops intervening after entropy goes 
 ## Tree search action states
 tree_search_poss_actions = np.arange(-100, 101, step=25) # Possible actions to perform for tree search alg.
 #tree_search_poss_actions = np.array([-90, 90])
-action_len = 0#1/dt # Length between each action selection in frames (1 second is baseline)
+action_len = 1#1/dt # Length between each action selection in frames (1 second is baseline)
 C = 5 # Number of model to sample from the posterior
 knowledge = 'posterior_unweighted'  # Can be a model as nd.array, 'posterior_unweighted', 'posterior_weighted', 'perfect' for perfect knowledge and 'random' for random sampling
 # Gain parameters
@@ -722,6 +723,7 @@ def import_states_params_asdict():
                 'params': {
                     'args': [],
                     'kwargs': {
+                        'noise_std': noise_std,
                         'change_memory': change_memory,
                         'change': change_type
                     }

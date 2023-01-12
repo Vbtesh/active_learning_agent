@@ -335,6 +335,7 @@ class Treesearch_AS(Action_state):
         self._C = C  
 
         # Gain type
+        self._gain_type = gain_type
         if gain_type == 'expected_information_gained':
             self._gain_function = self._pure_information  
         elif gain_type == 'resource_rational':

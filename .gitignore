@@ -1,5 +1,9 @@
 testing_ground.ipynb
 fitting_testing.ipynb
+recovery_analysis_run.py
+recovery_analysis.ipynb
+information_gain.ipynb
+
 resources/
 derivations/
 */__pycache__/

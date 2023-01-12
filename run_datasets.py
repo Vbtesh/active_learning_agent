@@ -16,9 +16,9 @@ with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/gl
 
 ## 
 experiments = [
-    #'experiment_1', 
-    #'experiment_2', 
-    #'experiment_3',
+    'experiment_1', 
+    'experiment_2', 
+    'experiment_3',
     'experiment_4'
 ]
 
@@ -55,7 +55,7 @@ print(len(selected_data.keys()))
 
 models_dict = import_states_params_asdict()
 
-use_fitted_parameters = True
+use_fitted_parameters = False
 
 if use_fitted_parameters:
     with open('./data/params_fitting_outputs/fitted_params.json', 'r') as infile:
@@ -75,7 +75,11 @@ if use_fitted_parameters:
         if 'ces' in model:
             internal_states_list.append(model)
 else:
-    internal_states_list = ['change_d_obs_fk']
+    internal_states_list = [
+        #'normative_&_1',
+        #'LC_discrete_&_1',
+        'LC_discrete_att_&_att'
+    ]
 
 action_states_list = [
     #'experience_vao',
@@ -91,7 +95,7 @@ models_dict = import_states_params_asdict()
 save_data = True
 save_full_data = False
 # /!\ Data loss warning /!\
-console = False
+verbose = False
 
 # Action plan
 # Possible plans
@@ -101,10 +105,10 @@ console = False
 ## 'actor': /!\ ONLY ONE INTERNAL STATE AT A TIME /!\ will use the action states specified in action_states_list 
 ## 'obs': will stay idle
 ## 'random': will pick random actions
-use_action_plan = 'real_actions'
+use_action_plan = 'actor'
 
 # Add tag at end of file
-tag = '_true_4_CES'
+tag = '_OA'
 
 
 print('CONFIGURATION')
@@ -131,5 +135,5 @@ fit_models(internal_states_list,
            use_fitted_params=use_fitted_parameters,
            save_data=save_data,
            save_full_data=save_full_data,
-           console=console,
+           verbose=verbose,
            file_tag=tag)

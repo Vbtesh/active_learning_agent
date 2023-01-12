@@ -26,7 +26,7 @@ def generalised_model_fitting(internal_states_list,                # List of int
                               save_data=True,                      # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
                               save_full_data=False,                # /!\ Performance warning /!\ if true, stores all posterior distributions over models
                               fit_judgement=False,                 # If true fit judgement
-                              console=False,                       # If true, log progress on the console
+                              verbose=False,                       # If true, log progress on the console
                               file_tag='',
                               file_name='general_summary',
                               K=3,
@@ -192,9 +192,9 @@ def generalised_model_fitting(internal_states_list,                # List of int
 
         # Fit data
         if fit_or_run == 'fit':
-            experiment.fit(console=console)
+            experiment.fit(verbose=verbose)
         else:
-            experiment.run(console=console)
+            experiment.run(verbose=verbose)
 
         # If not saving data, continue here
         if not save_data:
@@ -343,7 +343,7 @@ def fit_models(internal_states_list,                # List of internal states na
                save_data=True,                      # /!\ Data miss warning /!\ if False does not save the results but simply fit experiments
                save_full_data=False,                # /!\ Performance warning /!\ if true, stores all posterior distributions over models
                fit_judgement=False,                 # If true fit judgement
-               console=False,                       # If true, log progress on the console
+               verbose=False,                       # If true, log progress on the console
                file_tag=''):                             
 
     # General loop
@@ -517,9 +517,9 @@ def fit_models(internal_states_list,                # List of internal states na
 
             # Fit data
             if fit_or_run == 'fit':
-                experiment.fit(console=console)
+                experiment.fit(verbose=verbose)
             else:
-                experiment.run(console=console)
+                experiment.run(verbose=verbose)
 
 
             # If not saving data, continue here
@@ -577,6 +577,7 @@ def fit_models(internal_states_list,                # List of internal states na
                     generated_data[utid][internal_states_list[i]]['judgement_data'] = judgement_data
                 
                 ## Generate summary dataframe entry
+                
                 output = [
                     utid,
                     participant,
@@ -591,8 +592,10 @@ def fit_models(internal_states_list,                # List of internal states na
                     i_s.prior_entropy, # Prior entropy
                     i_s.posterior_entropy_unsmoothed, # Unsmoothed posterior entropy
                     i_s.posterior_entropy, # Posterior entropy
-                    fitted_params_dict[internal_states_list[i]] # Model specs, for specific parametrisations (None if irrelevant)
+                    None
                 ]
+                if use_fitted_params:
+                    output[-1] = fitted_params_dict[internal_states_list[i]] # Model specs, for specific parametrisations (None if irrelevant)
 
                 data_output = {df.columns[i]:[output[i]] for i in range(len(df.columns))}
                 out_df = pd.DataFrame(data=data_output)
@@ -605,6 +608,7 @@ def fit_models(internal_states_list,                # List of internal states na
         
         # Save data every 5 participants and reset df
         if save_data and part_idx % 15 == 0:
+            print('Saving...')
 
             if save_full_data:
                 with open(f'./data/.models_full_data/full_data_{fit_or_run}{file_tag}.obj', 'wb') as outfile:
@@ -615,6 +619,7 @@ def fit_models(internal_states_list,                # List of internal states na
             # Resets dfs
             df_old = None
             df = pd.DataFrame(columns=cols)
+            print('Done.')
 
     
     # Final save
