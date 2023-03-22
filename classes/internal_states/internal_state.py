@@ -4,7 +4,7 @@ import numpy as np
 from numpy.random.mtrand import sample
 import pandas as pd
 from scipy import stats
-from scipy.stats import distributions
+from copy import deepcopy
 
 from classes.action_states.experience_discrete_3D_AS import Experience_discrete_3D_AS
 
@@ -16,6 +16,8 @@ class Internal_state():
         self._N = N
         self._n = 0
         self._K = K
+
+        self.variational = False
 
         self._prior_param = prior_param # Can either be a temperature parameter if the internal is discrete or a vector of standard deviation if it is continuous
 
@@ -34,7 +36,7 @@ class Internal_state():
     ## Parameters can change but there must always be current set of posterior parameters & a history of the parameters at each time step
     def update(self, sensory_state, action_state):
 
-        self._posterior_params_history[self._n] = self._posterior_params
+        self._posterior_params_history[self._n] = deepcopy(self._posterior_params)
 
         self._posterior_params = self._p_i_g_s_i(sensory_state, action_state, *self._p_i_g_s_i_args)
         
@@ -146,25 +148,8 @@ class Internal_state():
         return causal_mat
 
     
-    def _causality_vector(self, link_mat, dim2=None):
-        s = link_mat.shape[0]**2 - link_mat.shape[0]
-
-        if dim2:
-            causal_vec = np.zeros((s, dim2))
-        else:
-            causal_vec = np.zeros(s)
-
-        idx = 0
-        for i in range(link_mat.shape[0]):
-            for j in range(link_mat.shape[1]):
-                if i != j:
-                    if dim2:
-                        causal_vec[idx, :] = link_mat[i, j]
-                    else:
-                        causal_vec[idx] = link_mat[i, j]
-                    idx += 1
-
-        return causal_vec
+    def _causality_vector(self, link_mat, dim2=False):
+        return link_mat[~np.eye(link_mat.shape[0], dtype=bool)]
 
 
 # Internal state using a discrete probability distribution to represent the external states
@@ -469,6 +454,7 @@ class Continuous_IS(Internal_state):
     def __init__(self, N, K, links, dt, update_func, update_func_args=[], generate_sample_space=True, sample_params=True, prior_param=None , smoothing=0):
         super().__init__(N, K, update_func, update_func_args=update_func_args, prior_param=prior_param)
 
+
         # Smoothing temperature
         self._smoothing_temp = smoothing
 
@@ -737,6 +723,7 @@ class Variational_IS(Internal_state):
 
         super().__init__(N, K, update_func, update_func_args=update_func_args, prior_param=prior_param)
 
+        self.variational = True
         self._num_links = len(links)
         self._dt = dt
         self._smoothing_temp = smoothing
@@ -779,10 +766,31 @@ class Variational_IS(Internal_state):
     # Entropy over all parameters
     @property
     def variational_posterior_entropy(self):
-        posterior_factors_partition = [np.exp(factor).sum() for factor in self._posterior_params]
+        #posterior_factors_partition = [np.exp(factor).sum() for factor in self._posterior_params]
         posterior_factors = [self._likelihood(factor) for factor in self._posterior_params]
         posterior_entropies = np.array([self._entropy(factor) for factor in posterior_factors])
         return posterior_entropies
+    
+    # Entropy over all parameters
+    @property
+    def variational_posterior_entropy_history(self):
+        posterior_entropies = np.zeros((self._n, self._num_factors))
+        for i in np.arange(self._n):
+            posterior_factors = [self._likelihood(factor) for factor in self._posterior_params_history[i]]
+            posterior_entropies[i, :] = np.array([self._entropy(factor) for factor in posterior_factors])
+        
+        return posterior_entropies
+    
+    @property
+    def variational_MAP(self):
+        non_link_params = self.variational_posterior[~self._link_params_bool]
+
+        argmax_nonlink = [np.argmax(nl_param) for nl_param in non_link_params]
+
+        non_link_names = self._param_names_list[~self._link_params_bool]
+
+        MAP_nonlink = [ self._parameter_set[name]['values'][arg] for name, arg in zip(non_link_names, argmax_nonlink)]
+        return MAP_nonlink, self.MAP
 
     # Standard properties
     # Will only provide a posterior over causal link parameters

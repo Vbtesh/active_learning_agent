@@ -1,5 +1,6 @@
 from copy import deepcopy
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from seaborn import external
@@ -92,7 +93,7 @@ class Experiment():
 
                 if n % 10 == 0 and verbose:
                     print('Iter:', n)
-                    print('Current MAP:', self.agent.MAP, 'Entropy:', self.agent.posterior_entropy)
+                    print('Current MAP:', self.agent.MAP, 'Entropy:', self.agent.posterior_entropy_unsmoothed)
                     #print('Current posterior:')
                     #print(np.around(agent.model.posterior_links, 2))
 
@@ -113,7 +114,8 @@ class Experiment():
         if self._iter == 1:
             plt.figure(figsize=(12, 8))
             plt.subplot(2, 2, 1)
-            self.external_state.plot_network()
+            ax = self.external_state.plot_network()
+            ax.set_title('Network Realisation')
             plt.subplot(2, 2, 2)
             self.agent.plot_perceptions()
             if not self.agent._multi_is:
@@ -134,6 +136,62 @@ class Experiment():
                 sns.lineplot(self._entropy_history[i,:], palette=palette)
 
 
+    def path_report(self, context='talk', style='ticks', ax=None, title=None, labels=None):
+        if not self._i <= self._iter:
+            print('Call the run method to generate data.')
+            return
+        
+        if not ax:
+            sns.set_theme(context=context, style=style)
+            fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+        
+
+        ax = self.external_state.plot_network(ax, labels=labels)
+
+        if title:
+            ax.set_title(title)
+
+        ax.legend(labelspacing=2, loc=6, bbox_to_anchor=(1, 0.5), fontsize=15)
+
+        ax.set_ylim(-101, 101)
+        ax.set_xlim(0, self._N)
+
+        ax.set_yticks([-100, -50, 0, 50, 100])
+        #plt.setp(ax.get_yticklabels(), fontsize=15)
+        #plt.setp(ax.get_xticklabels(), fontsize=15)
+
+        sns.despine(ax=ax, left=False, bottom=False, trim=True)
+
+        return ax
+        
+
+
+    def variational_report(self, context='talk', style='ticks', figsize=(10, 14), labels=None):
+        if not self._i <= self._iter:
+            print('Call the run method to generate data.')
+            return
+
+        sns.set_theme(context=context, style=style)
+        fig, axs = plt.subplots(3, 1, figsize=figsize, sharex=True)
+
+        axs[0] = self.path_report(ax=axs[0], labels=labels)
+
+        axs[1] = self.agent.plot_variational_schedules(ax=axs[1], labels=labels)
+
+        axs[2] = self.agent.plot_variational_entropies(ax=axs[2], labels=labels)
+
+        variational_MAP = self.agent.internal_state.variational_MAP
+        fig.suptitle(f"""
+                    True parameters: $\\theta={self.external_state._theta}$, $\sigma={float(self.external_state._sig)}$, graph: {self.external_state.causal_vector} \n
+                    MAP parameters: $\\theta={variational_MAP[0][0]}$, $\sigma={variational_MAP[0][1]}$, graph: {variational_MAP[1]} \n
+                    Evidence weight = ${self.agent.internal_state._evidence_weight}$, Certainty threshold = ${self.agent.internal_state._epsilon}$
+                    """, fontsize = 17, x=0.38)
+
+        plt.tight_layout()
+
+        pass
+
+
     def change_report(self):
         if not self._i <= self._iter:
             print('Call the run method to generate data.')
@@ -144,6 +202,9 @@ class Experiment():
             plt.figure(figsize=(12, 8))
             plt.subplot(2, 2, 1)
             self.agent.plot_alt_perceptions()
+
+
+    
 
 
 

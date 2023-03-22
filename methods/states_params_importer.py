@@ -88,16 +88,24 @@ guess = 0.3 # The probability mass to be shared among other possibilities
 beta_ces = 4
 
 # Variational agent
-certainty_threshold = 0.1
+## Different update schedules:
+### full, single_factor, single_variable
+update_schedule = 'single_variable'
+certainty_threshold = 0.4 # Should be represented as a percentage of the maximum entropy
+evidence_weight = .4
+theta_prior = np.ones(4) / 4
+sigma_prior = np.ones(4) / 4
+theta_prior = np.array([0.1, 0.7, 0.1, 0.1])
+sigma_prior = np.array([0.1, 0.1, 0.7, 0.1])
 parameter_set = {
     'theta': {
         'values': np.array([0.1, 0.5, 1, 3]),
-        'prior': np.ones(4) / 4,
+        'prior': theta_prior,
         'type': 'no_link'
     },
     'sigma': {
         'values': np.array([0.5, 1, 3, 6]),
-        'prior': np.ones(4) / 4,
+        'prior': sigma_prior,
         'type': 'no_link'
     },
 }
@@ -648,6 +656,8 @@ def import_states_params_asdict():
                         parameter_set
                     ],
                     'kwargs': {
+                        'update_schedule': update_schedule,
+                        'evidence_weight': evidence_weight,
                         'certainty_threshold': certainty_threshold,
                         'prior_param': prior_param,
                         'smoothing': beta

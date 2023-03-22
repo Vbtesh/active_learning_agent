@@ -119,7 +119,7 @@ class OU_Network():
         self._realised = True
 
 
-    def reset(self, back=np.inf, save=False):
+    def reset(self, back=np.inf, init_state=None, save=False):
         if save:
             self._data_history.append(self._X[0:self._n+1,:]) # Save data in history
             self._inter_history.append(self._X[0:self._n+1])  # Save interventions in history
@@ -134,30 +134,41 @@ class OU_Network():
             # Reset interventions
             self._I[self._n+1:] = np.nan
 
+            if type(init_state) == np.ndarray:
+                self._X[0, :] = init_state
 
-    def plot_network(self, history=None):
+
+    def plot_network(self, ax=None, labels=None, history=None):
         palette = sns.color_palette() # Set palette
         sns.set_palette(palette)
-        
-        ax = sns.lineplot(data=self._X[0:self._n+1,:], lw=1.5) # Plot data
+
+        if not labels:
+            labels = np.arange(self._K)
 
         for i in range(self._K):
+            if ax:
+                sns.lineplot(data=self._X[0:self._n+1, i], label=labels[i], ax=ax) # Plot data
+            else:
+                ax = sns.lineplot(data=self._X[0:self._n+1, i], label=labels[i]) # Plot data
+
             # Plot interventions where relevant
             ints = self._I[0:self._n+1] == i
             if np.sum(ints) == 0:
                 continue
             
             x = np.arange(len(ints))
-            y1 = self._range[0] * ints
+            y1 = self._range[0] * ints 
             y2 = self._range[1] * ints
             ax.fill_between(x, y1, y2, color=palette[i], alpha=0.15)
 
-        plt.title('Network realisation')
-        plt.ylim(self._range[0], self._range[1])
+        ax.set_title('Network realisation')
+        ax.set_ylim(self._range[0], self._range[1])
 
         # Plot history
         if history:
             pass
+
+        return ax
 
 
     # Properties

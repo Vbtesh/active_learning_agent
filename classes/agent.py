@@ -1,6 +1,7 @@
 from math import log
 from os import name
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt 
 import seaborn as sns
 
@@ -167,6 +168,15 @@ class Agent():
             return posterior_entropies
         else:
             return self._internal_state.posterior_entropy
+        
+
+    @property
+    def posterior_entropy_unsmoothed(self):
+        if self._multi_is:
+            posterior_entropies = [IS.posterior_entropy_unsmoothed for IS in self._internal_state]
+            return posterior_entropies
+        else:
+            return self._internal_state.posterior_entropy_unsmoothed
 
     @property
     def entropy_history(self):
@@ -258,4 +268,71 @@ class Agent():
         ax.set_zlabel('Likelihood')
         plt.title('Posterior evolution')
 
+
+    def plot_variational_entropies(self, ax=None, labels=None):
+        if not ax:
+            fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+
+        if labels:
+            label_mapping = {str(k):labels[k] for k in range(self.internal_state._K)}
+        else:
+            label_mapping = {str(k):str(k) for k in range(self.internal_state._K)}
+        
+        entropies = self.internal_state.variational_posterior_entropy_history
+
+        df = pd.DataFrame(entropies, columns=self.internal_state._param_names_list)
+
+        sns.lineplot(data=df, ax=ax)
+
+        sns.lineplot(x=np.arange(df.shape[0]), y=self.internal_state._epsilon*np.ones(df.shape[0]), color='black', alpha=0.85, ax=ax)
+
+        ax.legend(self._format_labels(df.columns, label_mapping), loc=6, bbox_to_anchor=(1, 0.5), fontsize=15)
+        
+        ax.set_title(f'Factors entropy histories \n black line represents the certainty threshold ($\epsilon = {self.internal_state._epsilon}$)')
+
+        sns.despine(ax=ax, left=False, bottom=False, trim=False)
+        
+        return ax
+
+    def plot_variational_schedules(self, ax=None, labels=None):
+        if not ax:
+            fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+
+        if labels:
+            label_mapping = {str(k):labels[k] for k in range(self.internal_state._K)}
+        else:
+            label_mapping = {str(k):str(k) for k in range(self.internal_state._K)}
+
+        hist = self.internal_state._update_schedule_history
+
+        hist_idx = (hist*(np.arange(hist.shape[1])[::-1] + 1)).astype(float)
+
+        hist_idx[np.where(hist_idx == 0)] = np.nan
+
+        df = pd.DataFrame(hist_idx, columns=self.internal_state._param_names_list[::-1])
+
+        sns.lineplot(data=df, ax=ax)
+        ax.set_yticks(np.arange(df.columns.size) + 1)
+        ax.set_yticklabels(self._format_labels(df.columns, label_mapping))
+        ax.legend([], frameon=False)
+
+        ax.set_xlim(0, self._N)
+
+        ax.set_title(f'Update schedules: factors updated at each timepoint')
+
+        sns.despine(ax=ax, left=False, bottom=False, trim=False)
+
+        return ax
+
+
+    def _format_labels(self, labels, label_mapping):
+        new_labels = []
+        for l in labels:
+            if l[0] not in np.arange(10).astype(str):
+                new_labels.append(f'$\{l}$')
+            else:
+                split_t = l.split('->')
+                nt = f'{label_mapping[split_t[0]]} \\rightarrow {label_mapping[split_t[1]]}'
+                new_labels.append(f'${nt}$')
+        return new_labels
         

@@ -83,11 +83,23 @@ class Action_state():
             self._n += 1
             return self._current_action
 
-        elif internal_state.posterior_entropy_unsmoothed < self._epsilon and self._n > 0.05*self._N:
-            self._n += 1
-            self._current_action = None
-            self._actions_history[self._n] = self._current_action 
-            return self._current_action
+        elif not internal_state.variational:
+            if internal_state.posterior_entropy_unsmoothed < self._epsilon and self._n > 0.05*self._N:
+                self._n += 1
+                self._current_action = None
+                self._actions_history[self._n] = self._current_action 
+                return self._current_action
+            
+        elif internal_state.variational:
+            variational_entropy = internal_state.variational_posterior_entropy.sum()
+            certainty_ths = internal_state._epsilon*internal_state.variational_posterior_entropy.size
+            #if variational_entropy < certainty_ths and self._n > 0.05*self._N:
+            if internal_state._update_schedule.sum() == 0:
+                self._n += 1
+                self._current_action = None
+                self._actions_history[self._n] = self._current_action 
+                return self._current_action
+
 
         # Sample_action function.
         self._current_action = self._sample_action(external_state, sensory_state, internal_state)
