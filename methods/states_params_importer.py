@@ -47,280 +47,141 @@ def import_states_asdict():
 
     return states_dict
 
-# GENERAL parameters
-N = 301 # Number of datapoints
-K = 3 # Number of variables in the network
-
-# OU parameters
-theta = 0.5 # rigidity
-sigma = 3 # Variance of the one step white noise
-dt = 1/5 # Time step: 1/dt = fps
-
-
-# EXTERNAL STATE parameters
-ground_truth = np.zeros(K**2 - K)  # Ground truth model generating the data: /!\ Depends on the trial /!\
-
-
-# INTERNAL STATE parameters
-L = np.array([-1, -1/2, 0, 1/2, 1]) # Possible link values
-#L = np.array([-1, 0, 1])
-prior_param = 0 # Priors param: temperature for discrete and variance form continuous /!\ Depends on the trial /!\
-beta = 1 # Temperature for the softmax smoothing function, will be fitted
-
-## Attention based internal states
-decay_rate = 0.4 # Discount rate of attention 
-decay_type = 'exponential' # Functional form of attention parameter: 'exponential' or 'sigmoid'
-
-## Normative and LC
-### N/A: use OU parameters
-
-## Change based internal states
-prop_constant = theta*dt
-samples_variance = 3/5 # Variance of the likelihood of the links samples
-hypothesis = 'full_knowledge' # can be 'distance', 'cause_value' and 'full_knowledge'
-
-# Causal event segmentation
-abs_bounds = (0, 100)
-ces_type = 'time_sensitive'
-ce_threshold = 0.3 # Causal event threshold (read as a percentage of bounds)
-time_threshold = 10  # The time threshold in frames before is strong, after is weak
-guess = 0.3 # The probability mass to be shared among other possibilities
-beta_ces = 4
-
-# Variational agent
-## Different update schedules:
-### full, single_factor, single_variable
-update_schedule = 'single_variable'
-certainty_threshold = 0.4 # Should be represented as a percentage of the maximum entropy
-evidence_weight = .4
-theta_prior = np.ones(4) / 4
-sigma_prior = np.ones(4) / 4
-theta_prior = np.array([0.1, 0.7, 0.1, 0.1])
-sigma_prior = np.array([0.1, 0.1, 0.7, 0.1])
-parameter_set = {
-    'theta': {
-        'values': np.array([0.1, 0.5, 1, 3]),
-        'prior': theta_prior,
-        'type': 'no_link'
-    },
-    'sigma': {
-        'values': np.array([0.5, 1, 3, 6]),
-        'prior': sigma_prior,
-        'type': 'no_link'
-    },
-}
-
-# SENSORY STATES parameters
-noise_std = 0 * dt
-change_memory = 1 # 1 means no smoothing, just look at raw change
-change_type = 'raw' # Can be 'normalised', 'relative', 'raw'
-
-
-# ACTION STATES parameters
-behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
-epsilon = 0.1 # Certainty threshold: agent stops intervening after entropy goes below epsilon
-
-## Tree search action states
-tree_search_poss_actions = np.arange(-100, 101, step=25) # Possible actions to perform for tree search alg.
-#tree_search_poss_actions = np.array([-90, 90])
-action_len = 1#1/dt # Length between each action selection in frames (1 second is baseline)
-C = 5 # Number of model to sample from the posterior
-knowledge = 'posterior_unweighted'  # Can be a model as nd.array, 'posterior_unweighted', 'posterior_weighted', 'perfect' for perfect knowledge and 'random' for random sampling
-# Gain parameters
-gain_type = 'expected_information_gained'
-resource_rational_parameter = 0.1
-### Hard horizon
-depth = 1 # Target depth for hard horizon undiscounted gain  
-### Soft horizon
-horizon = 1e-2 # For soft horizon discounted gain
-discount = 0.01 # For soft horizon discounted gain
-### Action selection policy
-action_temperature = 1
-softmax_policy_funcs = epsilon_greedy_init(0)#softmax_policy_init(action_temperature)
-
-
-    
-## Experience Value Acting Observing (vao) action states
-experience_poss_actions = np.arange(0, 101, step=10) # Possible actions to perform for experiences
-mus = np.array([80, 6, 2]) # Mus are the means: [value, acting_len, obs_len], note: acting and obs len should be in seconds
-cov = np.array([[20**2, 0, 0],
-               [0, 1**2, 0],
-               [0, 0, 1**2]])
-actions_prior_params = (mus, cov) # Continuous Gaussian parameters for the distribution over interventions
-time_unit = dt
-action_learn_rate = 0 # 0 means no learning, 1 means do last sampled action (random walk)
-max_acting_time = 30 # Maximum acting time in seconds
-max_obs_time = 30 # Maximum observing time in seconds
-experience_measure = 'information' # Can be "information" or "change"
-### Action selection policy
-discrete_policy_funcs = discrete_policy_init()
-
-
-
-#
-def params_to_fit_importer(internal_state, 
-                           fitting_change=True, 
-                           fitting_attention=True,
-                           fitting_guess=True,
-                           fitting_strength=True,
-                           fitting_prior=True,
-                           random_increment=1):
-
-
-    params_dict = {
-        'smoothing': [
-            1,
-            (0, 100),
-            ['smoothing']
-        ],
-        'decay_rate': [
-            2/3 + 1e-1*np.random.normal() * random_increment,
-            (0, 1),
-            ['decay_rate']
-        ],
-        'change_memory': [
-            1/2 + 1e-1*np.random.normal() * random_increment,
-            (1/10, 1),
-            ['change_memory']
-        ],
-        'ce_threshold' : [
-            1/5 + 1e-1*np.random.normal() * random_increment,
-            (1e-2, 1),
-            ['ce_threshold']
-        ],
-        'time_threshold' : [
-            15 + 2*np.random.normal() * random_increment, 
-            (1, 50),
-            ['time_threshold']
-        ],
-        'guess': [
-            0.1 + 1e-1*np.random.normal() * random_increment,
-            (1e-2, 0.7),
-            ['guess']
-        ],
-        'prior_param': [
-            1 + 1e-1*np.random.normal() * random_increment,
-            (0, 550),
-            ['prior_param']
-        ],
-        'certainty_threshold': [
-            np.abs(0.1 + 1e-2*np.random.normal() * random_increment),
-            (1e-2, 10),
-            ['certainty_threshold']
-        ]
-    }
-
-    params_initial_guesses = [] 
-    params_bounds = []
-    internal_params_labels = []
-    action_params_labels = []
-    sensory_params_labels = []
-    fitting_list = []
-    idx = 0
-
-    if internal_state[:6] == 'change':
-        
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-        
-        if fitting_attention:
-            params_initial_guesses.append(params_dict['decay_rate'][0])
-            params_bounds.append(params_dict['decay_rate'][1])
-            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
-            fitting_list.append('att')
-            idx += 1
-        
-        if fitting_change:
-            params_initial_guesses.append(params_dict['change_memory'][0])
-            params_bounds.append(params_dict['change_memory'][1])
-            sensory_params_labels.append(params_dict['change_memory'][2] + [idx])
-            fitting_list.append('cha')
-            idx += 1
-
-    elif internal_state[:3] == 'ces':
-        params_initial_guesses.append(params_dict['ce_threshold'][0])
-        params_bounds.append(params_dict['ce_threshold'][1])
-        internal_params_labels.append(params_dict['ce_threshold'][2] + [idx])
-        idx += 1
-
-        if fitting_strength:
-            params_initial_guesses.append(params_dict['time_threshold'][0])
-            params_bounds.append(params_dict['time_threshold'][1])
-            internal_params_labels.append(params_dict['time_threshold'][2] + [idx])
-            fitting_list.append('str')
-            idx += 1
-
-        if fitting_guess:
-            params_initial_guesses.append(params_dict['guess'][0])
-            params_bounds.append(params_dict['guess'][1])
-            internal_params_labels.append(params_dict['guess'][2] + [idx])
-            fitting_list.append('guess')
-            idx += 1
-
-
-    elif internal_state == 'LC_discrete':
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-
-
-    elif 'LC_discrete_att' in internal_state:
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-        
-        if fitting_attention:
-            params_initial_guesses.append(params_dict['decay_rate'][0])
-            params_bounds.append(params_dict['decay_rate'][1])
-            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
-            fitting_list.append('att')
-            idx += 1
-
-    elif internal_state == 'normative':
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-
-    elif internal_state == 'mean_field_vis':
-        
-        params_initial_guesses.append(params_dict['smoothing'][0])
-        params_bounds.append(params_dict['smoothing'][1])
-        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
-        idx += 1
-
-        params_initial_guesses.append(params_dict['certainty_threshold'][0])
-        params_bounds.append(params_dict['certainty_threshold'][1])
-        internal_params_labels.append(params_dict['certainty_threshold'][2] + [idx])
-        idx += 1
-
-
-    if fitting_prior:
-        params_initial_guesses.append(params_dict['prior_param'][0])
-        params_bounds.append(params_dict['prior_param'][1])
-        internal_params_labels.append(params_dict['prior_param'][2] + [idx])
-        fitting_list.append('prior')
-
-
-    return (params_initial_guesses, params_bounds, internal_params_labels, action_params_labels, sensory_params_labels, fitting_list)
 
 # All but trial dependent stuff: Number of datapoint, Number of variables
 def import_states_params_asdict():
+    # GENERAL parameters
+    N = 301 # Number of datapoints
+    K = 3 # Number of variables in the network
+
+    # OU parameters
+    theta = 0.5 # rigidity
+    sigma = 3 # Variance of the one step white noise
+    dt = 1/5 # Time step: 1/dt = fps
+
+
+    # EXTERNAL STATE parameters
+    ground_truth = np.zeros(K**2 - K)  # Ground truth model generating the data: /!\ Depends on the trial /!\
+
+
+    # INTERNAL STATE parameters
+    L = np.array([-1, -1/2, 0, 1/2, 1]) # Possible link values
+    #L = np.array([-1, 0, 1])
+    prior_param = 0 # Priors param: temperature for discrete and variance form continuous /!\ Depends on the trial /!\
+    beta = 1 # Temperature for the softmax smoothing function, will be fitted
+
+    ## Attention based internal states
+    decay_rate = 0.4 # Discount rate of attention 
+    decay_type = 'exponential' # Functional form of attention parameter: 'exponential' or 'sigmoid'
+
+    ## Normative and LC
+    ### N/A: use OU parameters
+
+    ## Change based internal states
+    prop_constant = theta*dt
+    samples_variance = 3/5 # Variance of the likelihood of the links samples
+    hypothesis = 'full_knowledge' # can be 'distance', 'cause_value' and 'full_knowledge'
+
+    # Causal event segmentation
+    abs_bounds = (0, 100)
+    ces_type = 'time_sensitive'
+    ce_threshold = 0.3 # Causal event threshold (read as a percentage of bounds)
+    time_threshold = 10  # The time threshold in frames before is strong, after is weak
+    guess = 0.3 # The probability mass to be shared among other possibilities
+    beta_ces = 4
+
+    # Variational agent
+    # Type agent:
+    ## normative VS local_computations
+    factorisation = 'normative' 
+    ## Different update schedules:
+    ### omniscient, full, single_factor, single_link, single_variable
+    update_schedule = 'full'
+    certainty_threshold = .4 # Should be represented as a percentage of the maximum entropy
+    evidence_weight = 0.1
+    block_learning = [
+        #'theta'
+    ]
+    theta_values = np.array([0.1, 0.5, 1, 2])
+    #theta_values = np.array([0.1, 0.5, 1])
+    sigma_values = np.array([sigma/2, sigma, sigma*2, sigma*4], dtype=float)
+    #sigma_values = np.array([1, 2, 3, 4])
+    theta_prior = np.ones(theta_values.size) / theta_values.size
+    sigma_prior = np.ones(4) / 4
+    #theta_prior = np.array([0.9, 0.05, 0.05])
+    #sigma_prior = np.array([0.0033, 0.99, 0.0033, 0.0033])
+    parameter_set_init = {
+        'theta': {
+            'values': theta_values,
+            'prior': theta_prior,
+            'type': 'no_link'
+        },
+        'sigma': {
+            'values': sigma_values,
+            'prior': sigma_prior,
+            'type': 'no_link'
+        },
+    }
+
+    # SENSORY STATES parameters
+    noise_std = 0 * dt
+    change_memory = 1 # 1 means no smoothing, just look at raw change
+    change_type = 'raw' # Can be 'normalised', 'relative', 'raw'
+
+
+    # ACTION STATES parameters
+    behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
+    epsilon = 0.1 # Certainty threshold: agent stops intervening after entropy goes below epsilon
+
+    ## Tree search action states
+    #np.arange(-100, 101, step=50)
+    tree_search_poss_actions = np.arange(-100, 101, step=25) # Possible actions to perform for tree search alg.
+    tree_search_poss_actions = np.arange(-100, 101, step=50)
+    action_len = 1#1/dt # Length between each action selection in frames (1 second is baseline)
+    C = 5 # Number of model to sample from the posterior
+    knowledge = 'posterior_unweighted'  # Can be a model as nd.array, 'posterior_unweighted', 'posterior_weighted', 'perfect' for perfect knowledge and 'random' for random sampling
+    # Gain parameters
+    gain_type = 'expected_information_gained'
+    resource_rational_parameter = 0.1
+    ### Hard horizon
+    depth = 1 # Target depth for hard horizon undiscounted gain  
+    ### Soft horizon
+    horizon = 1e-2 # For soft horizon discounted gain
+    discount = 0.01 # For soft horizon discounted gain
+    ### Action selection policy
+    action_temperature = 1
+    softmax_policy_funcs = epsilon_greedy_init(0)#softmax_policy_init(action_temperature)
+
+
+
+    ## Experience Value Acting Observing (vao) action states
+    experience_poss_actions = np.arange(0, 101, step=10) # Possible actions to perform for experiences
+    mus = np.array([80, 6, 2]) # Mus are the means: [value, acting_len, obs_len], note: acting and obs len should be in seconds
+    cov = np.array([[20**2, 0, 0],
+                   [0, 1**2, 0],
+                   [0, 0, 1**2]])
+    actions_prior_params = (mus, cov) # Continuous Gaussian parameters for the distribution over interventions
+    time_unit = dt
+    action_learn_rate = 0 # 0 means no learning, 1 means do last sampled action (random walk)
+    max_acting_time = 30 # Maximum acting time in seconds
+    max_obs_time = 30 # Maximum observing time in seconds
+    experience_measure = 'information' # Can be "information" or "change"
+    ### Action selection policy
+    discrete_policy_funcs = discrete_policy_init()
+
+
     params_dict = {
         'external': {
             'OU_Network': {
                 'object': OU_Network,
                 'params': {
                     'args': [
-                        theta,
-                        dt,
-                        sigma
+                        dt
                     ],
-                    'kwargs': {}
+                    'kwargs': {
+                        'theta': theta,
+                        'sigma': sigma,
+                    }
                 }
             }
         },
@@ -330,11 +191,12 @@ def import_states_params_asdict():
                 'params': {
                     'args': [
                         L,
-                        dt, 
+                        dt,
                         theta,
-                        sigma,
+                        sigma
                     ],
                     'kwargs': {
+                        'evidence_weight': evidence_weight,
                         'prior_param': prior_param,
                         'smoothing': beta
                     }
@@ -351,6 +213,7 @@ def import_states_params_asdict():
                         sigma,
                     ],
                     'kwargs': {
+                        'evidence_weight': evidence_weight,
                         'prior_param': prior_param,
                         'smoothing': beta
                     }
@@ -375,6 +238,7 @@ def import_states_params_asdict():
                     ],
                     'kwargs': {
                         'decay_rate': decay_rate,
+                        'evidence_weight': evidence_weight,
                         'prior_param': prior_param,
                         'smoothing': beta
                     }
@@ -392,6 +256,7 @@ def import_states_params_asdict():
                     ],
                     'kwargs': {
                         'decay_rate': decay_rate,
+                        'evidence_weight': evidence_weight,
                         'prior_param': prior_param,
                         'smoothing': beta
                     }
@@ -653,12 +518,14 @@ def import_states_params_asdict():
                     'args': [
                         L,
                         dt,
-                        parameter_set
+                        parameter_set_init
                     ],
                     'kwargs': {
+                        'factorisation': factorisation,
                         'update_schedule': update_schedule,
                         'evidence_weight': evidence_weight,
                         'certainty_threshold': certainty_threshold,
+                        'block_learning': block_learning,
                         'prior_param': prior_param,
                         'smoothing': beta
                     }
@@ -742,3 +609,157 @@ def import_states_params_asdict():
         }
     }
     return params_dict
+
+
+
+
+#
+def params_to_fit_importer(internal_state, 
+                           fitting_change=True, 
+                           fitting_attention=True,
+                           fitting_guess=True,
+                           fitting_strength=True,
+                           fitting_prior=True,
+                           random_increment=1):
+
+
+    params_dict = {
+        'smoothing': [
+            1,
+            (0, 100),
+            ['smoothing']
+        ],
+        'decay_rate': [
+            2/3 + 1e-1*np.random.normal() * random_increment,
+            (0, 1),
+            ['decay_rate']
+        ],
+        'change_memory': [
+            1/2 + 1e-1*np.random.normal() * random_increment,
+            (1/10, 1),
+            ['change_memory']
+        ],
+        'ce_threshold' : [
+            1/5 + 1e-1*np.random.normal() * random_increment,
+            (1e-2, 1),
+            ['ce_threshold']
+        ],
+        'time_threshold' : [
+            15 + 2*np.random.normal() * random_increment, 
+            (1, 50),
+            ['time_threshold']
+        ],
+        'guess': [
+            0.1 + 1e-1*np.random.normal() * random_increment,
+            (1e-2, 0.7),
+            ['guess']
+        ],
+        'prior_param': [
+            1 + 1e-1*np.random.normal() * random_increment,
+            (0, 550),
+            ['prior_param']
+        ],
+        'certainty_threshold': [
+            np.abs(0.1 + 1e-2*np.random.normal() * random_increment),
+            (1e-2, 10),
+            ['certainty_threshold']
+        ]
+    }
+
+    params_initial_guesses = [] 
+    params_bounds = []
+    internal_params_labels = []
+    action_params_labels = []
+    sensory_params_labels = []
+    fitting_list = []
+    idx = 0
+
+    if internal_state[:6] == 'change':
+        
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+        
+        if fitting_attention:
+            params_initial_guesses.append(params_dict['decay_rate'][0])
+            params_bounds.append(params_dict['decay_rate'][1])
+            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
+            fitting_list.append('att')
+            idx += 1
+        
+        if fitting_change:
+            params_initial_guesses.append(params_dict['change_memory'][0])
+            params_bounds.append(params_dict['change_memory'][1])
+            sensory_params_labels.append(params_dict['change_memory'][2] + [idx])
+            fitting_list.append('cha')
+            idx += 1
+
+    elif internal_state[:3] == 'ces':
+        params_initial_guesses.append(params_dict['ce_threshold'][0])
+        params_bounds.append(params_dict['ce_threshold'][1])
+        internal_params_labels.append(params_dict['ce_threshold'][2] + [idx])
+        idx += 1
+
+        if fitting_strength:
+            params_initial_guesses.append(params_dict['time_threshold'][0])
+            params_bounds.append(params_dict['time_threshold'][1])
+            internal_params_labels.append(params_dict['time_threshold'][2] + [idx])
+            fitting_list.append('str')
+            idx += 1
+
+        if fitting_guess:
+            params_initial_guesses.append(params_dict['guess'][0])
+            params_bounds.append(params_dict['guess'][1])
+            internal_params_labels.append(params_dict['guess'][2] + [idx])
+            fitting_list.append('guess')
+            idx += 1
+
+
+    elif internal_state == 'LC_discrete':
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+
+
+    elif 'LC_discrete_att' in internal_state:
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+        
+        if fitting_attention:
+            params_initial_guesses.append(params_dict['decay_rate'][0])
+            params_bounds.append(params_dict['decay_rate'][1])
+            internal_params_labels.append(params_dict['decay_rate'][2] + [idx])
+            fitting_list.append('att')
+            idx += 1
+
+    elif internal_state == 'normative':
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+
+    elif internal_state == 'mean_field_vis':
+        
+        params_initial_guesses.append(params_dict['smoothing'][0])
+        params_bounds.append(params_dict['smoothing'][1])
+        internal_params_labels.append(params_dict['smoothing'][2] + [idx])
+        idx += 1
+
+        params_initial_guesses.append(params_dict['certainty_threshold'][0])
+        params_bounds.append(params_dict['certainty_threshold'][1])
+        internal_params_labels.append(params_dict['certainty_threshold'][2] + [idx])
+        idx += 1
+
+
+    if fitting_prior:
+        params_initial_guesses.append(params_dict['prior_param'][0])
+        params_bounds.append(params_dict['prior_param'][1])
+        internal_params_labels.append(params_dict['prior_param'][2] + [idx])
+        fitting_list.append('prior')
+
+
+    return (params_initial_guesses, params_bounds, internal_params_labels, action_params_labels, sensory_params_labels, fitting_list)

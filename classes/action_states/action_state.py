@@ -91,8 +91,6 @@ class Action_state():
                 return self._current_action
             
         elif internal_state.variational:
-            variational_entropy = internal_state.variational_posterior_entropy.sum()
-            certainty_ths = internal_state._epsilon*internal_state.variational_posterior_entropy.size
             #if variational_entropy < certainty_ths and self._n > 0.05*self._N:
             if internal_state._update_schedule.sum() == 0:
                 self._n += 1
@@ -367,10 +365,16 @@ class Treesearch_AS(Action_state):
 
             # Compute action values
             ## /!\ Deepcopies are important to not break the main state objects /!\
-            action_values = self._tree_search_action_values(deepcopy(external_state), 
-                                                            deepcopy(sensory_state), 
-                                                            deepcopy(internal_state))
+            es_copy = deepcopy(external_state)
+            ss_copy = deepcopy(sensory_state)
+            is_copy = deepcopy(internal_state)
+            action_values = self._tree_search_action_values(es_copy, 
+                                                            ss_copy, 
+                                                            is_copy)
 
+            del es_copy
+            del ss_copy
+            del is_copy
             # Sample a sequence of actions
             sampled_action = self._policy(action_values)
 

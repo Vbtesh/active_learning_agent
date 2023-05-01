@@ -6,8 +6,6 @@ import pandas as pd
 from scipy import stats
 from copy import deepcopy
 
-from classes.action_states.experience_discrete_3D_AS import Experience_discrete_3D_AS
-
 
 
 # Main Internal state class
@@ -135,16 +133,9 @@ class Internal_state():
 
 
     def _causality_matrix(self, link_vec, fill_diag=1):
-        num_var = int((1 + np.sqrt(1 + 4*len(link_vec))) / 2)
-        causal_mat = fill_diag * np.ones((num_var, num_var))
-
-        idx = 0
-        for i in range(num_var):
-            for j in range(num_var):
-                if i != j:
-                    causal_mat[i, j] = link_vec[idx] 
-                    idx += 1
-
+        K = int(1/2 + np.sqrt(1-4*(-link_vec.size)) / 2)
+        causal_mat = fill_diag * np.ones(K)
+        causal_mat[~np.eye(K, dtype=bool)] = link_vec
         return causal_mat
 
     
@@ -213,11 +204,36 @@ class Discrete_IS(Internal_state):
             return self.posterior
         else:
             return self._links_to_models(self.posterior) 
+        
+    @property
+    def posterior_over_links_unsmoothed(self):
+        if len(self.posterior.shape) == 1:
+            return self._models_to_links(self.posterior_unsmoothed)
+        else:
+            return self.posterior_unsmoothed
+
+    @property
+    def posterior_over_models_unsmoothed(self):
+        if len(self.posterior.shape) == 1:
+            return self.posterior_unsmoothed
+        else:
+            return self._links_to_models(self.posterior_unsmoothed) 
 
     @property
     def MAP(self):
         graph_idx = np.argmax(self.posterior_over_models)
         return self._sample_space[graph_idx]
+    
+    @property
+    def MAP_unsmoothed(self):
+        graph_idx = np.argmax(self.posterior_over_models_unsmoothed)
+        return self._sample_space[graph_idx]
+    
+    @property
+    def MAP_weighted(self):
+        links = np.tile(self._L, (self._K**2 - self._K, 1))
+        weighted_links = links * self.posterior_over_links_unsmoothed
+        return np.round(weighted_links.sum(axis=1), 2)
 
     @property
     def posterior_entropy(self):
@@ -241,6 +257,10 @@ class Discrete_IS(Internal_state):
     @property
     def posterior_entropy_over_links(self):
         return self._entropy(self.posterior_over_links)
+    
+    @property
+    def posterior_entropy_over_links_unsmoothed(self):
+        return self._entropy(self.posterior_over_links_unsmoothed)
     
     @property
     def entropy_history(self):
@@ -719,7 +739,7 @@ class Continuous_IS(Internal_state):
 
 # Internal state using a discrete probability distribution to represent the external states
 class Variational_IS(Internal_state):
-    def __init__(self, N, K, links, dt, parameter_set, update_func, update_func_args=[], generate_sample_space=True, prior_param=None, smoothing=0):
+    def __init__(self, N, K, links, dt, parameter_set, update_func, update_func_args=[], factorisation='normative', generate_sample_space=True, prior_param=None, smoothing=0):
 
         super().__init__(N, K, update_func, update_func_args=update_func_args, prior_param=prior_param)
 
@@ -729,6 +749,9 @@ class Variational_IS(Internal_state):
         self._smoothing_temp = smoothing
         
         self._L = links
+
+        # Set up factorisation
+        self._factorisation = factorisation
 
         # Complete parameter set
         self._param_names_list, self._parameter_set = self._complete_parameter_set(parameter_set)
@@ -790,7 +813,15 @@ class Variational_IS(Internal_state):
         non_link_names = self._param_names_list[~self._link_params_bool]
 
         MAP_nonlink = [ self._parameter_set[name]['values'][arg] for name, arg in zip(non_link_names, argmax_nonlink)]
-        return MAP_nonlink, self.MAP
+        return MAP_nonlink, self.MAP_unsmoothed
+    
+    @property
+    def variational_MAP_weighted(self):
+        non_link_params = self.variational_posterior[~self._link_params_bool]
+        non_link_values = [self._parameter_set[name]['values'] for name in self._param_names_list[~self._link_params_bool]]
+        
+        MAP_nonlink = np.array([(values*probs).sum() for probs, values in zip(non_link_params, non_link_values)])
+        return np.round(MAP_nonlink, 2), self.MAP_weighted
 
     # Standard properties
     # Will only provide a posterior over causal link parameters
@@ -812,6 +843,13 @@ class Variational_IS(Internal_state):
             return self._models_to_links(self.posterior)
         else:
             return self.posterior
+    
+    @property
+    def posterior_over_links_unsmoothed(self):
+        if len(self.posterior.shape) == 1:
+            return self._models_to_links(self.posterior_unsmoothed)
+        else:
+            return self.posterior_unsmoothed
 
     @property
     def posterior_over_models(self):
@@ -819,12 +857,32 @@ class Variational_IS(Internal_state):
             return self.posterior
         else:
             return self._links_to_models(self.posterior) 
+    
+    @property
+    def posterior_over_models_unsmoothed(self):
+        if len(self.posterior_unsmoothed.shape) == 1:
+            return self.posterior_unsmoothed
+        else:
+            return self._links_to_models(self.posterior_unsmoothed) 
+
 
     @property
     def MAP(self):
         graph_idx = np.argmax(self.posterior_over_models)
         return self._sample_space[graph_idx]
-
+    
+    @property
+    def MAP_unsmoothed(self):
+        graph_idx = np.argmax(self.posterior_over_models_unsmoothed)
+        return self._sample_space[graph_idx]
+    
+    @property
+    def MAP_weighted(self):
+        links = np.tile(self._L, (self._K**2 - self._K, 1))
+        weighted_links = links * self.posterior_over_links_unsmoothed
+        map_weighted = weighted_links.sum(axis=1)
+        return np.round(map_weighted, 2)
+        
     @property
     def posterior_entropy(self):
         return self._entropy(self.posterior_over_models)
@@ -847,6 +905,10 @@ class Variational_IS(Internal_state):
     @property
     def posterior_entropy_over_links(self):
         return self._entropy(self.posterior_over_links)
+    
+    @property
+    def posterior_entropy_over_links_unsmoothed(self):
+        return self._entropy(self.posterior_over_links_unsmoothed)
     
     @property
     def entropy_history(self):
@@ -1068,26 +1130,31 @@ class Variational_IS(Internal_state):
 
         for i in range(self._K):
             for j in range(self._K):
-                if i != j:
+                if i != j:    
                     parameter_set[links_matrix[i, j]] = {
                         'values': self._L,
                         'prior': np.ones(self._L.size) / self._L.size, 
                         'type': 'link'
                     }
+
                     dep_as_bool_nl = np.ones(num_no_links, dtype=bool)
-
                     dep_as_bool = np.zeros((self._K, self._K), dtype=bool)
-                    other_cause = np.zeros(self._K, dtype=bool)
-                    other_link = None
-                    for k in range(self._K):
-                        if k != i and k != j:
-                            other_cause[k] = 1
-                            other_link = links_matrix[k, j]
 
-                    dep_as_bool[other_cause, j] = 1
+                    if self._factorisation == 'normative':
+                        other_cause = np.zeros(self._K, dtype=bool)
+                        other_link = None
+                        for k in range(self._K):
+                            if k != i and k != j:
+                                other_cause[k] = 1
+                                other_link = links_matrix[k, j]
 
-                    parameter_set[links_matrix[i, j]]['dependencies_as_bool'] = np.concatenate((dep_as_bool_nl, dep_as_bool[~eye]), dtype=bool)
-                    parameter_set[links_matrix[i, j]]['dependencies_as_str'] = np.array(no_link_names + [other_link], dtype=object)
+                        dep_as_bool[other_cause, j] = 1
+
+                        parameter_set[links_matrix[i, j]]['dependencies_as_bool'] = np.concatenate((dep_as_bool_nl, dep_as_bool[~eye]), dtype=bool)
+                        parameter_set[links_matrix[i, j]]['dependencies_as_str'] = np.array(no_link_names + [other_link], dtype=object)
+                    elif self._factorisation == 'local_computations':
+                        parameter_set[links_matrix[i, j]]['dependencies_as_bool'] = np.concatenate((dep_as_bool_nl, dep_as_bool[~eye]), dtype=bool)
+                        parameter_set[links_matrix[i, j]]['dependencies_as_str'] = np.array(no_link_names, dtype=object)
 
         names = np.concatenate((np.array(no_link_names, dtype=object), links_matrix[~eye]), dtype=object)
         return names, parameter_set
@@ -1133,6 +1200,11 @@ class Variational_IS(Internal_state):
     def _construct_parameter_subset_dict(self):
         subsets = {}
         all_links = self._link_names_matrix[~np.eye(self._K, dtype=bool)]
+
+        # Just hyperparameters
+        sub = self._param_names_list[~self._link_params_bool].tolist()
+        values = [self._parameter_set[p]['values'] for p in sub]
+        subsets[','.join(sub)] = self._construct_parameter_combinations(sub, values)
 
         # Links
         for k in self._param_names_list[self._link_params_bool]:

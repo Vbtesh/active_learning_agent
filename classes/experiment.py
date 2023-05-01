@@ -136,7 +136,7 @@ class Experiment():
                 sns.lineplot(self._entropy_history[i,:], palette=palette)
 
 
-    def path_report(self, context='talk', style='ticks', ax=None, title=None, labels=None):
+    def path_report(self, context='talk', style='ticks', ax=None, title=None, labels=None, savefig=False):
         if not self._i <= self._iter:
             print('Call the run method to generate data.')
             return
@@ -144,6 +144,9 @@ class Experiment():
         if not ax:
             sns.set_theme(context=context, style=style)
             fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+            no_init_ax = True
+        else:
+            no_init_ax = False
         
 
         ax = self.external_state.plot_network(ax, labels=labels)
@@ -160,9 +163,16 @@ class Experiment():
         #plt.setp(ax.get_yticklabels(), fontsize=15)
         #plt.setp(ax.get_xticklabels(), fontsize=15)
 
-        sns.despine(ax=ax, left=False, bottom=False, trim=True)
+        sns.despine(ax=ax, left=False, bottom=False)
+        plt.tight_layout()
 
-        return ax
+        if savefig:
+            fig.savefig(f'./plots/{savefig}.pdf')
+
+        if no_init_ax:
+            plt.show()
+        else:
+            return ax
         
 
 
@@ -181,10 +191,14 @@ class Experiment():
         axs[2] = self.agent.plot_variational_entropies(ax=axs[2], labels=labels)
 
         variational_MAP = self.agent.internal_state.variational_MAP
+        if self.agent.internal_state._factorisation == 'normative':
+            factorisation = 'normative'
+        elif self.agent.internal_state._factorisation == 'local_computations':
+            factorisation = 'LC'
         fig.suptitle(f"""
                     True parameters: $\\theta={self.external_state._theta}$, $\sigma={float(self.external_state._sig)}$, graph: {self.external_state.causal_vector} \n
                     MAP parameters: $\\theta={variational_MAP[0][0]}$, $\sigma={variational_MAP[0][1]}$, graph: {variational_MAP[1]} \n
-                    Evidence weight = ${self.agent.internal_state._evidence_weight}$, Certainty threshold = ${self.agent.internal_state._epsilon}$
+                    Factorisation: {factorisation}, Evidence weight = ${self.agent.internal_state._evidence_weight}$, Certainty threshold = ${self.agent.internal_state._epsilon}$
                     """, fontsize = 17, x=0.38)
 
         plt.tight_layout()

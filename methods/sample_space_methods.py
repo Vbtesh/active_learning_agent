@@ -37,16 +37,24 @@ def build_space(K, links, as_matrix=False):
 
 
 def causality_matrix(link_vec, fill_diag=1):
-    num_var = int((1 + np.sqrt(1 + 4*len(link_vec))) / 2)
-    causal_mat = fill_diag * np.ones((num_var, num_var))
-
-    idx = 0
-    for i in range(num_var):
-        for j in range(num_var):
-            if i != j:
-                causal_mat[i, j] = link_vec[idx] 
-                idx += 1
-            
+    K = int(1/2 + np.sqrt(1-4*(-link_vec.size)) / 2)
+    causal_mat = fill_diag * np.ones(K)
+    causal_mat[~np.eye(K, dtype=bool)] = link_vec
     return causal_mat
 
+
+def causality_vector(link_mat):
+    return link_mat[~np.eye(link_mat.shape[0], dtype=bool)]
+
+
+def construct_link_matrix(K):
+    G = np.empty((K, K), dtype=object)
+    for i in range(K):
+        for j in range(K):
+            if i == j:
+                G[i, j] = ''
+            else:
+                G[i, j] = f'{i}->{j}'
+    
+    return G
 

@@ -106,9 +106,10 @@ select_change = [
     'Baseline'
 ]
 
-df_prior = pd.DataFrame(index=pids, columns=['experiment', 'lc_bic', 'lc_prior', 'change_bic', 'change_prior'])
+df_prior = pd.DataFrame(index=pids, columns=['experiment', 'pid', 'lc_bic', 'lc_prior', 'change_bic', 'change_prior'])
 
 df_prior['experiment'] = experiments_series
+df_prior['pid'] = df_2.pid.to_list()
 df_prior['lc_bic'] = df[df.model_name == 'AS LC w. prior'].bic.to_list()
 df_prior['change_bic'] = df[df.model_name == 'Change w. prior'].bic.to_list()
 

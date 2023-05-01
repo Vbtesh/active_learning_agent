@@ -4,7 +4,7 @@ import numpy as np
 
 # Normative discrete agent
 class Normative_DIS(Discrete_IS):
-    def __init__(self, N, K, links, dt, theta, sigma, generate_sample_space=True, sample_params=False, prior_param=None, smoothing=False):
+    def __init__(self, N, K, links, dt, theta, sigma, evidence_weight=1, generate_sample_space=True, sample_params=False, prior_param=None, smoothing=False):
         super().__init__(N, K, links, dt, self._update_rule, generate_sample_space=generate_sample_space, sample_params=sample_params, prior_param=prior_param, smoothing=smoothing)
 
         
@@ -18,6 +18,8 @@ class Normative_DIS(Discrete_IS):
             self._theta = theta
             self._sigma = sigma  
 
+        # Evidence weight
+        self._evidence_weight = evidence_weight
 
         # Collect observations to recompute mus
         self._obs_history = [None for _ in range(self._N+1)]
@@ -31,7 +33,7 @@ class Normative_DIS(Discrete_IS):
         obs = sensory_state.s
 
         # Likelihood of observed the new values given the previous values for each model
-        likelihood_per_var = stats.norm.logpdf(obs, loc=self._mus, scale=self._sigma*np.sqrt(self._dt)) # Compute probabilities
+        likelihood_per_var = self._evidence_weight * stats.norm.logpdf(obs, loc=self._mus, scale=self._sigma*np.sqrt(self._dt)) # Compute probabilities
 
         # Normalisation step
         likelihood_log = likelihood_per_var - np.amax(likelihood_per_var, axis=0)

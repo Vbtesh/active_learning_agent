@@ -4,9 +4,11 @@ import seaborn as sns
 
 
 class OU_Network():
-    def __init__(self, N, K, theta, dt, sigma, ground_truth=None,
-                                               init_state=None,
-                                               range_values=(-100, 100)):
+    def __init__(self, N, K, dt, theta=0.5, 
+                                 sigma=3, 
+                                 ground_truth=None,
+                                 init_state=None,
+                                 range_values=(-100, 100)):
         # Parameters
         if type(ground_truth) == np.ndarray:
             self.set_ground_truth(ground_truth)
