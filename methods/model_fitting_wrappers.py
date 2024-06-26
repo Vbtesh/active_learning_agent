@@ -181,7 +181,11 @@ def fit_group_param_wrapper(data_path,
     
     if 'LC_discrete' in internal_state:
         if 'att' in parameter_tags:
-            fitting_attention = True     
+            fitting_attention = True  
+
+    if 'Adaptive' in internal_state:
+        if 'att' in parameter_tags:
+            fitting_attention = True   
 
     # CES
     fitting_guess = False

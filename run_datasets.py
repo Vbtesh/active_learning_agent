@@ -25,7 +25,7 @@ experiments = [
 exceptions = [
     '566feba6b937e400052d33b2', 
     '5f108dea719866356702d26f', 
-    '5fbfe145e52a44000a9c2966'
+    #'5fbfe145e52a44000a9c2966'
 ]
 
 print(len(modelling_data.keys()))
@@ -38,9 +38,12 @@ for part, data in modelling_data.items():
     #if data['experiment'] in experiments and idx % pick_interval == 0:
     #    selected_data[part] = data
 
-    if part not in exceptions:
-        if data['experiment'] in experiments:
-            selected_data[part] = data
+    #if part not in exceptions:
+    #    if data['experiment'] in experiments:
+    #        selected_data[part] = data
+
+    if part == '5fbfe145e52a44000a9c2966':
+        selected_data[part] = data
     
     idx += 1
 
@@ -64,21 +67,26 @@ if use_fitted_parameters:
     internal_states_list_full = list(use_fitted_parameters[list(use_fitted_parameters.keys())[0]].keys())
     internal_states_list = []
     for model in internal_states_list_full:
-        #if 'normative' in model:
-        #    internal_states_list.append(model)
-        #elif 'LC_discrete_att_' in model:
-        #    internal_states_list.append(model)
-        #elif 'change_obs_fk' in model:
-        #    internal_states_list.append(model)
-        #if 'LC_discrete_&' in model:
-        #    internal_states_list.append(model)
+        if 'normative' in model:
+            internal_states_list.append(model)
+        if 'LC_discrete_att_' in model:
+            internal_states_list.append(model)
+        if 'change_obs_fk' in model:
+            internal_states_list.append(model)
         if 'ces' in model:
+            internal_states_list.append(model)
+        if 'LC_discrete_&' in model:
+            internal_states_list.append(model)
+        if 'LC_discrete_att_all' in model:
+            internal_states_list.append(model)
+        if 'Adaptive' in model:
             internal_states_list.append(model)
 else:
     internal_states_list = [
         #'normative_&_1',
-        #'LC_discrete_&_1',
-        'LC_discrete_att_&_att'
+        'LC_discrete_&_1',
+        #'LC_discrete_att_&_att'
+        #'Adaptive_Selective_LC_&_1'
     ]
 
 action_states_list = [
@@ -108,7 +116,7 @@ verbose = False
 use_action_plan = 'actor'
 
 # Add tag at end of file
-tag = '_OA'
+tag = '_OA_part'
 
 
 print('CONFIGURATION')

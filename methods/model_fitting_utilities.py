@@ -970,7 +970,7 @@ def fit_participant(params_to_fit,
         experiment = Experiment(agent, external_state)
 
         # Fit data
-        experiment.fit(console=False)
+        experiment.fit(verbose=False)
 
         # Extract relevant data
         # Extract posterior
@@ -1218,7 +1218,7 @@ def fit_group(params_to_fit,
             experiment = Experiment(agent, external_state)
 
             # Fit data
-            experiment.fit(console=False)
+            experiment.fit(verbose=False)
 
             # Extract relevant data
             # Extract posterior

@@ -16,7 +16,10 @@ models_ran = [
     'normative',
     'ces_strength',
     'ces_no_strength',
-    'LC_discrete_att',
+#    'LC_discrete_att',
+#    'LC_discrete_att_all',
+    'Adaptive_LC',
+    'Adaptive_Selective_LC',
     'change_obs_fk'
 ]
 
@@ -29,7 +32,10 @@ file_tags = [
     [1, 'prior'],
     ['str_guess'],
     ['guess'],
-    ['att', 'att_prior'],
+    #['att', 'att_prior'],
+    #['att', 'att_prior'],
+    [1, 'prior'],
+    [1, 'prior'],
     ['att_cha', 'att_cha_prior']
 ]
 
@@ -42,6 +48,9 @@ model_labels = [
     ['normative', 'normative w. prior'],
     ['CES strength sensitive'],
     ['CES basic'],
+    #['Adaptive LC att.', 'Adaptive LC att. w. prior'],
+    #['AS LC att.', 'AS LC att. w. prior'],
+    ['Adaptive LC', 'Adaptive LC w. prior'],
     ['AS LC', 'AS LC w. prior'],
     ['Change', 'Change w. prior']
 ]

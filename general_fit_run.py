@@ -12,7 +12,7 @@ from methods.states_params_importer import import_states_params_asdict
 #with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:
 #with open('./data/.modelling_data_manipulated/congruence_inverted_CI.obj', 'rb') as inFile:
 #with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/intervention_db.obj', 'rb') as inFile:
-with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/global_modelling_data.obj', 'rb') as inFile:
+with open('/mnt/c/Users/vbtes/CompProjects/vbtCogSci/continuous_time_active_learning/data/global_modelling_data.obj', 'rb') as inFile:
     modelling_data = pickle.load(inFile)
 
 experiments = [
@@ -25,7 +25,7 @@ experiments = [
 exceptions = [
     '566feba6b937e400052d33b2', 
     '5f108dea719866356702d26f', 
-    '5fbfe145e52a44000a9c2966'
+    #'5fbfe145e52a44000a9c2966'
 ]
 
 print(len(modelling_data.keys()))
@@ -38,7 +38,7 @@ for key, data in modelling_data.items():
     #if data['experiment'] in experiments and idx % pick_interval == 0:
     #    selected_data[part] = data
 
-    if data['pid'] not in exceptions:
+    if key not in exceptions:
         if data['experiment'] in experiments:
             selected_data[key] = data
     
@@ -69,9 +69,10 @@ if use_fitted_parameters:
         #    internal_states_list.append(model)
 else:
     internal_states_list = [
-        #'normative_&_1',
-        'LC_discrete_&_1',
+        'normative_&_1',
+        #'LC_discrete_&_1',
         #'LC_discrete_att_&_att'
+        #'Adaptive_Selective_LC_&_1'
     ]
 
 action_states_list = [

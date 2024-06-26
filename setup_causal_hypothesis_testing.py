@@ -10,6 +10,9 @@ def calc_accuracy(ground_truth_str, MAP_str):
 
     return acc
 
+
+# Directory for the analysis
+analysis_directory = 'continuous_time_active_learning'
 # Generate long form datasets to test possible causal hypotheses in R
 
 locations = {
@@ -39,6 +42,12 @@ models = [
     'LC_discrete_attention_&_att_prior',
     'LC_discrete_att_&_att',
     'LC_discrete_att_&_att_prior',
+    'LC_discrete_att_all_&_att',
+    'LC_discrete_att_all_&_att_prior',
+    'Adaptive_LC_&_1',
+    'Adaptive_LC_&_prior',
+    'Adaptive_Selective_LC_&_1',
+    'Adaptive_Selective_LC_&_prior',
     'change_d_obs_fk_&_att_cha',
     'change_d_obs_fk_&_att_cha_prior',
     'change_obs_fk_&_att_cha',
@@ -64,9 +73,9 @@ for tag, loc in locations.items():
         diff_label = model_df.difficulty.to_list()
         model_df.difficulty = model_df.difficulty.replace({'congruent':1, 'incongruent':2, 'implausible':3})
         diff = model_df.difficulty.to_list()
-        model_df[model_df.experiment == 'experiment_2'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/simulated_data/{model}_2_{tag}.csv')
-        model_df[model_df.experiment == 'experiment_3'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/simulated_data/{model}_3_{tag}.csv')
-        model_df[model_df.experiment == 'experiment_4'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/simulated_data/{model}_4_{tag}.csv')
+        model_df[model_df.experiment == 'experiment_2'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/{analysis_directory}/data/simulated_data/{model}_2_{tag}.csv')
+        model_df[model_df.experiment == 'experiment_3'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/{analysis_directory}/data/simulated_data/{model}_3_{tag}.csv')
+        model_df[model_df.experiment == 'experiment_4'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/{analysis_directory}/data/simulated_data/{model}_4_{tag}.csv')
 
 
     df_all = pd.concat([df_all, df], axis=0)
@@ -78,9 +87,9 @@ for model in models:
     model_df.difficulty = model_df.difficulty.replace({'congruent':1, 'incongruent':2, 'implausible':3})
     model_df.actions = model_df.actions.replace(tag_dict)
 
-    model_df[model_df.experiment == 'experiment_2'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/simulated_data/{model}_2_all.csv')
-    model_df[model_df.experiment == 'experiment_3'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/simulated_data/{model}_3_all.csv')
-    model_df[model_df.experiment == 'experiment_4'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/csl_global_analysis/data/simulated_data/{model}_4_all.csv')
+    model_df[model_df.experiment == 'experiment_2'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/{analysis_directory}/data/simulated_data/{model}_2_all.csv')
+    model_df[model_df.experiment == 'experiment_3'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/{analysis_directory}/data/simulated_data/{model}_3_all.csv')
+    model_df[model_df.experiment == 'experiment_4'].to_csv(f'/mnt/c/Users/vbtes/CompProjects/vbtCogSci/{analysis_directory}/data/simulated_data/{model}_4_all.csv')
 
 
     

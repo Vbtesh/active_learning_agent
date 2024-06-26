@@ -134,7 +134,7 @@ class Internal_state():
 
     def _causality_matrix(self, link_vec, fill_diag=1):
         K = int(1/2 + np.sqrt(1-4*(-link_vec.size)) / 2)
-        causal_mat = fill_diag * np.ones(K)
+        causal_mat = fill_diag * np.ones((K, K))
         causal_mat[~np.eye(K, dtype=bool)] = link_vec
         return causal_mat
 

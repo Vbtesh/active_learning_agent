@@ -71,7 +71,7 @@ def import_states_params_asdict():
     beta = 1 # Temperature for the softmax smoothing function, will be fitted
 
     ## Attention based internal states
-    decay_rate = 0.4 # Discount rate of attention 
+    decay_rate = 0.0 # Discount rate of attention 
     decay_type = 'exponential' # Functional form of attention parameter: 'exponential' or 'sigmoid'
 
     ## Normative and LC
@@ -98,7 +98,7 @@ def import_states_params_asdict():
     ### omniscient, full, single_factor, single_link, single_variable
     update_schedule = 'full'
     certainty_threshold = .4 # Should be represented as a percentage of the maximum entropy
-    evidence_weight = 0.1
+    evidence_weight = 1.0
     block_learning = [
         #'theta'
     ]
@@ -131,7 +131,7 @@ def import_states_params_asdict():
 
     # ACTION STATES parameters
     behaviour = 'obs'   # Can be 'obs', 'random' or 'actor'
-    epsilon = 0.1 # Certainty threshold: agent stops intervening after entropy goes below epsilon
+    epsilon = 0.01 # Certainty threshold: agent stops intervening after entropy goes below epsilon
 
     ## Tree search action states
     #np.arange(-100, 101, step=50)
@@ -257,6 +257,60 @@ def import_states_params_asdict():
                     'kwargs': {
                         'decay_rate': decay_rate,
                         'evidence_weight': evidence_weight,
+                        'prior_param': prior_param,
+                        'smoothing': beta
+                    }
+                }
+            },
+            'LC_discrete_att_all': {
+                'object': Local_computations_interfocus_DIS,
+                'params': {
+                    'args': [
+                        L, 
+                        dt, 
+                        theta,
+                        sigma,
+                        'exponential'  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'evidence_weight': evidence_weight,
+                        'prior_param': prior_param,
+                        'smoothing': beta,
+                        'varfocus': False
+                    }
+                }
+            },
+            'Adaptive_LC': {
+                'object': Local_computations_interfocus_DIS,
+                'params': {
+                    'args': [
+                        L, 
+                        dt, 
+                        theta,
+                        sigma,
+                        'exponential'  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
+                        'prior_param': prior_param,
+                        'smoothing': beta,
+                        'varfocus': False
+                    }
+                }
+            },
+            'Adaptive_Selective_LC': {
+                'object': Local_computations_interfocus_DIS,
+                'params': {
+                    'args': [
+                        L, 
+                        dt, 
+                        theta,
+                        sigma,
+                        'exponential'  
+                    ],
+                    'kwargs': {
+                        'decay_rate': decay_rate,
                         'prior_param': prior_param,
                         'smoothing': beta
                     }
@@ -723,7 +777,7 @@ def params_to_fit_importer(internal_state,
         idx += 1
 
 
-    elif 'LC_discrete_att' in internal_state:
+    elif 'LC_discrete_att' in internal_state or 'Adaptive' in internal_state:
         params_initial_guesses.append(params_dict['smoothing'][0])
         params_bounds.append(params_dict['smoothing'][1])
         internal_params_labels.append(params_dict['smoothing'][2] + [idx])

@@ -2,9 +2,9 @@ from methods.model_fitting_wrappers import fit_group_param_wrapper
 
 
 experiments = [
-    #['experiment_1'], 
-    #['experiment_2'], 
-    #['experiment_3'],
+    ['experiment_1'], 
+    ['experiment_2'], 
+    ['experiment_3'],
     ['experiment_4']
 ]
 
@@ -13,16 +13,20 @@ data_path = [
 ]
 
 internal_states = [
-    #'LC_discrete_att_partial',
-    #'LC_discrete_att_partial',
-    #'LC_discrete_att_total',
-    #'LC_discrete_att_total',
+    'Adaptive_LC',
+    'Adaptive_LC',
+    #'Adaptive_Selective_LC',
+    #'Adaptive_Selective_LC',
+    #'LC_discrete_att_all',
+    #'LC_discrete_att_all',
+    #'LC_discrete_att_all',
     #'change_obs_fk',
     #'LC_discrete_att',
     #'change_obs_fk',
+    #'LC_discrete_att',
     #'LC_discrete_att',
     #'LC_discrete', # Group 3
-    'LC_discrete', 
+    #'LC_discrete', 
     #'ces_strength', # Group 4
     #'ces_no_strength',
     #'normative',
@@ -30,16 +34,21 @@ internal_states = [
 ]
 
 tags = [
-    #['att'],
-    #['att', 'prior'],
-    #['att'],
+    ['1'],
+    ['prior'],
+    ['1'],
+    ['prior'],
+    #['1'],
+    #['prior'],
     #['att', 'prior'],
     #['att', 'cha'],
     #['att'],
     #['att', 'cha', 'prior'],
     #['att', 'prior'],
     #['1'],
-    ['prior'],
+    #['prior'],
+    #['1'],
+    #['prior'],
     #['str', 'guess'],
     #['guess'],
     #['1'],
